@@ -1,0 +1,14 @@
+# iSai Discord Music Bot — Python dependencies
+#
+# Install with:  pip install -r requirements.txt
+#
+# Notes:
+#   • discord.py[voice] installs PyNaCl for voice support.
+#   • mutagen reads audio metadata without external tools.
+#   • rapidfuzz is a fast, MIT-licensed fuzzy matching library.
+#   • python-dotenv loads DISCORD_TOKEN from a .env file.
+
+discord.py[voice]>=2.4.0
+rapidfuzz>=3.6.1
+mutagen>=1.47.0
+python-dotenv>=1.0.1
