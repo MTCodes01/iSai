@@ -105,6 +105,7 @@ class GuildPlayer:
                 await self.voice_client.move_to(channel)
         else:
             self.voice_client = await channel.connect()
+        self._loop = self.voice_client.client.loop
         return self.voice_client
 
     async def disconnect(self) -> None:
@@ -144,6 +145,13 @@ class GuildPlayer:
         songs = list(self.queue)
         random.shuffle(songs)
         self.queue = deque(songs)
+
+    def set_volume(self, volume: float) -> None:
+        """Set the playback volume (0.0 - 1.0)."""
+        self.volume = max(0.0, min(1.0, volume))
+        if self.voice_client and self.voice_client.source:
+            if getattr(self.voice_client.source, "volume", None) is not None:
+                self.voice_client.source.volume = self.volume
 
     # ------------------------------------------------------------------
     # Playback control
@@ -291,10 +299,9 @@ class GuildPlayer:
             if error:
                 log.error("Playback error for '%s': %s", song.title, error)
 
-            # Use call_soon_threadsafe because this runs in a worker thread
-            loop = asyncio.get_event_loop()
-            coro = self._play_next(text_channel)
-            asyncio.run_coroutine_threadsafe(coro, loop)
+            if self._loop:
+                coro = self._play_next(text_channel)
+                asyncio.run_coroutine_threadsafe(coro, self._loop)
 
         self.voice_client.play(source, after=after_callback)
         log.info("[Guild %d] Now playing: %s — %s", self.guild_id, song.artist, song.title)

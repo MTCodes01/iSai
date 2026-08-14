@@ -58,6 +58,51 @@ def _format_song_line(song: Song, idx: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# UI Components
+# ---------------------------------------------------------------------------
+
+class PlaylistPagination(discord.ui.View):
+    def __init__(self, songs: list[Song]):
+        super().__init__(timeout=180)
+        self.songs = songs
+        self.current_page = 0
+        self.max_page = max(0, (len(songs) - 1) // 10)
+        self.update_buttons()
+
+    def format_page(self) -> discord.Embed:
+        start = self.current_page * 10
+        end = start + 10
+        page_songs = self.songs[start:end]
+        
+        description = ""
+        for i, song in enumerate(page_songs, start=start + 1):
+            description += f"`{i}.` **{song.title}** — *{song.artist}*\n"
+            
+        embed = discord.Embed(
+            title=f"🎵 Library Playlist ({len(self.songs)} songs)",
+            description=description,
+            color=EMBED_COLOR
+        )
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_page + 1}")
+        return embed
+
+    def update_buttons(self):
+        self.prev_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page == self.max_page
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.format_page(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.format_page(), view=self)
+
+# ---------------------------------------------------------------------------
 # Cog definition
 # ---------------------------------------------------------------------------
 
@@ -549,6 +594,8 @@ class MusicCog(commands.Cog):
             ("🔂 /loop", "Toggle single-song loop"),
             ("🔁 /loopqueue", "Toggle full-queue loop"),
             ("🔄 /rescan", "Rescan the music library"),
+            ("🎶 /playlist", "View all available songs in the library"),
+            ("🔊 /volume", "Control the playback volume"),
             ("❓ /help", "Show this message"),
         ]
 
@@ -564,3 +611,45 @@ class MusicCog(commands.Cog):
             inline=False,
         )
         await interaction.followup.send(embed=embed)
+
+    # -----------------------------------------------------------------------
+    # /playlist
+    # -----------------------------------------------------------------------
+
+    @app_commands.command(name="playlist", description="View all available songs in the library.")
+    async def playlist(self, interaction: discord.Interaction) -> None:
+        """View the available songs with pagination."""
+        songs = self.library._songs
+        if not songs:
+            await interaction.response.send_message(
+                embed=error_embed("No songs available in the library.")
+            )
+            return
+            
+        view = PlaylistPagination(songs)
+        await interaction.response.send_message(embed=view.format_page(), view=view)
+
+    # -----------------------------------------------------------------------
+    # /volume
+    # -----------------------------------------------------------------------
+
+    @app_commands.command(name="volume", description="Set the playback volume.")
+    @app_commands.describe(level="Volume level from 1 to 100")
+    async def volume(self, interaction: discord.Interaction, level: int) -> None:
+        """Control the volume of the bot in VC."""
+        player: GuildPlayer = self.manager.get(interaction.guild_id)
+        
+        if level < 1 or level > 100:
+            await interaction.response.send_message(
+                embed=error_embed("Volume must be between 1 and 100.")
+            )
+            return
+            
+        player.set_volume(level / 100.0)
+        
+        embed = discord.Embed(
+            title="🔊 Volume Changed",
+            description=f"Volume set to **{level}%**.",
+            color=EMBED_COLOR
+        )
+        await interaction.response.send_message(embed=embed)
