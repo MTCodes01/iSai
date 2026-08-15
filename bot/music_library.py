@@ -73,6 +73,9 @@ class Song:
     # Lower-cased, punctuation-stripped composite search key used by fuzzy search
     search_key: str
 
+    # Whether this song is a remote internet stream (e.g., from yt-dlp)
+    is_stream: bool = False
+
     def to_dict(self) -> dict:
         """Serialise to a plain dict (for JSON caching)."""
         return asdict(self)

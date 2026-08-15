@@ -278,10 +278,14 @@ class GuildPlayer:
             return
 
         try:
+            options = dict(FFMPEG_OPTIONS)
+            if song.is_stream:
+                options["before_options"] = FFMPEG_BEFORE_OPTIONS
+
             source = discord.FFmpegPCMAudio(
                 song.path,
                 executable=FFMPEG_PATH,
-                **FFMPEG_OPTIONS,
+                **options,
             )
             # Wrap with PCMVolumeTransformer to allow runtime volume changes
             source = discord.PCMVolumeTransformer(source, volume=self.volume)

@@ -12,3 +12,4 @@ discord.py[voice]>=2.4.0
 rapidfuzz>=3.6.1
 mutagen>=1.47.0
 python-dotenv>=1.0.1
+yt-dlp>=2023.11.16

@@ -22,6 +22,7 @@ from discord.ext import commands
 
 from bot.music_library import MusicLibrary, Song
 from bot.player import PlayerManager, GuildPlayer
+from bot.yt_stream import search_song
 from bot.config import TOP_SEARCH_RESULTS
 from bot.utils import (
     make_embed,
@@ -653,3 +654,76 @@ class MusicCog(commands.Cog):
             color=EMBED_COLOR
         )
         await interaction.response.send_message(embed=embed)
+
+    # -----------------------------------------------------------------------
+    # /get
+    # -----------------------------------------------------------------------
+
+    @app_commands.command(name="get", description="Search for and play any song from the internet.")
+    @app_commands.describe(song_name="Song name to search for (e.g. on YouTube).")
+    async def get_song(self, interaction: discord.Interaction, song_name: str) -> None:
+        """Search the internet for a song and play it."""
+        await interaction.response.defer()
+
+        # --- Voice channel check ---
+        vc = _get_voice_channel(interaction)
+        if vc is None:
+            await interaction.followup.send(
+                embed=error_embed("You must be in a voice channel to use this command.")
+            )
+            return
+
+        # --- Search via yt-dlp ---
+        info = await search_song(song_name)
+        if not info or "url" not in info:
+            await interaction.followup.send(
+                embed=error_embed(f"Could not find any internet streams for **{song_name}**.")
+            )
+            return
+
+        # --- Connect / move to voice channel ---
+        player: GuildPlayer = self.manager.get(interaction.guild_id)
+        try:
+            await player.connect(vc)
+        except Exception as exc:
+            await interaction.followup.send(
+                embed=error_embed(f"Could not connect to voice channel: {exc}")
+            )
+            return
+
+        # --- Create Song instance ---
+        song = Song(
+            path=info["url"],
+            title=info.get("title", song_name),
+            artist=info.get("uploader", "Unknown Artist"),
+            album="Internet Stream",
+            duration=info.get("duration"),
+            search_key="",
+            is_stream=True
+        )
+
+        # --- Enqueue & start ---
+        if player.voice_client.is_playing() or player.voice_client.is_paused():
+            position = player.enqueue(song)
+            embed = make_embed(
+                title="➕ Added to Queue (Internet)",
+                description=f"**{song.title}**",
+                fields=[
+                    ("Artist", song.artist, True),
+                    ("Duration", format_duration(song.duration), True),
+                    ("Position in Queue", str(position), True),
+                ],
+            )
+        else:
+            player.enqueue(song)
+            await player.start(interaction.channel)
+            embed = make_embed(
+                title="▶️ Now Playing (Internet)",
+                description=f"**{song.title}**",
+                fields=[
+                    ("Artist", song.artist, True),
+                    ("Duration", format_duration(song.duration), True),
+                ],
+            )
+
+        await interaction.followup.send(embed=embed)
