@@ -1,0 +1,13 @@
+services:
+  musicbot:
+    build: .
+    container_name: isai_musicbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Mount your local music folder to the container's /app/music
+      - ./music:/app/music
+      # Optional: persist the cache file so it doesn't rescan on every container restart
+      # If uncommenting this, make sure to create an empty .music_cache.json file on your host first
+      # - ./.music_cache.json:/app/.music_cache.json

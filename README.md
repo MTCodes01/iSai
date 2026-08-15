@@ -106,6 +106,24 @@ music/
 python -m bot.bot
 ```
 
+### 🐳 Deploying with Docker (Alternative)
+
+If you prefer using Docker, you can run the bot easily using Docker Compose:
+
+1. Follow steps 1-5 above to configure your `.env` and add music to the `music/` folder.
+2. Build and start the container in the background:
+   ```bash
+   docker-compose up -d --build
+   ```
+3. To view logs:
+   ```bash
+   docker-compose logs -f
+   ```
+4. To stop the bot:
+   ```bash
+   docker-compose down
+   ```
+
 ---
 
 ## 🎮 Slash Commands
