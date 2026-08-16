@@ -699,7 +699,8 @@ class MusicCog(commands.Cog):
             album="Internet Stream",
             duration=info.get("duration"),
             search_key="",
-            is_stream=True
+            is_stream=True,
+            stream_headers=info.get("http_headers")
         )
 
         # --- Enqueue & start ---

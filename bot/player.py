@@ -280,7 +280,12 @@ class GuildPlayer:
         try:
             options = dict(FFMPEG_OPTIONS)
             if song.is_stream:
-                options["before_options"] = FFMPEG_BEFORE_OPTIONS
+                import shlex
+                before_opts = FFMPEG_BEFORE_OPTIONS
+                if getattr(song, "stream_headers", None):
+                    headers_str = "".join(f"{k}: {v}\r\n" for k, v in song.stream_headers.items())
+                    before_opts = f"-headers {shlex.quote(headers_str)} " + before_opts
+                options["before_options"] = before_opts
 
             source = discord.FFmpegPCMAudio(
                 song.path,
