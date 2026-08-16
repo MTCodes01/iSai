@@ -18,6 +18,11 @@ YDL_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",  # bind to ipv4 to prevent issues
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["web_embedded", "default"]
+        }
+    }
 }
 
 def _extract_info_sync(query: str) -> Optional[Dict[str, Any]]:

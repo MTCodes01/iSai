@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 
-# Install FFmpeg for audio processing
+# Install FFmpeg and Git for audio processing and dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
