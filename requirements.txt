@@ -12,4 +12,5 @@ discord.py[voice]>=2.4.0
 rapidfuzz>=3.6.1
 mutagen>=1.47.0
 python-dotenv>=1.0.1
-yt-dlp>=2023.11.16
+yt-dlp @ git+https://github.com/yt-dlp/yt-dlp.git@master
+# Force yt-dlp upgrade: 2026-08-16
