@@ -135,7 +135,7 @@ class ManagerRouter:
             if not target_bot:
                 target_bot = await self.find_free_bot(statuses)
                 if not target_bot:
-                    return web.json_response({'error': 'No free instances available. Please mention <@863835017000386630> and ask me to add more bots for music!'}, status=503)
+                    return web.json_response({'error': 'No free instances available. Please mention <@863835017000386630> and ask to add more bots for music!'}, status=503)
         else:
             if not target_bot:
                 # If vc_id wasn't provided or bot not in this VC, try to find any bot in the guild
