@@ -242,6 +242,170 @@ class MusicCog(commands.Cog):
             
         await interaction.followup.send(embed=success_embed("👋 Disconnected", "Goodbye!"))
 
+    @app_commands.command(name="queue", description="Show the current queue.")
+    async def queue(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("queue", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'The queue is empty.')))
+            return
+            
+        lines = []
+        if data.get('current'):
+            curr = data['current']
+            status_icon = "🔂" if data.get('loop_song') else "▶️"
+            lines.append(f"{status_icon} **Now Playing:** {curr.get('title')} — *{curr.get('artist')}* `[{format_duration(curr.get('duration'))}]`")
+            
+        if data.get('queue'):
+            lines.append("")
+            lines.append("**Up Next:**")
+            for i, q in enumerate(data['queue'], start=1):
+                lines.append(f"`{i}.` **{q.get('title')}** — *{q.get('artist')}* `[{format_duration(q.get('duration'))}]`")
+            if data.get('queue_length', 0) > 20:
+                lines.append(f"*… and {data['queue_length'] - 20} more songs*")
+                
+        footer_parts = []
+        if data.get('loop_song'): footer_parts.append("🔂 Looping current song")
+        if data.get('loop_queue'): footer_parts.append("🔁 Looping queue")
+        
+        embed = make_embed(
+            title=f"📋 Queue — {data.get('queue_length', 0)} song(s) pending",
+            description="\n".join(lines),
+        )
+        if footer_parts:
+            embed.set_footer(text="  •  ".join(footer_parts))
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="nowplaying", description="Show information about the current song.")
+    async def nowplaying(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("nowplaying", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=make_embed(title="🎵 Now Playing", description="Nothing is playing right now. Use `/play` to start!"))
+            return
+            
+        fields = [
+            ("Artist", data.get('artist', 'Unknown'), True),
+            ("Duration", format_duration(data.get('duration', 0)), True),
+        ]
+        if data.get('album') and data.get('album') != 'Unknown Album':
+            fields.append(("Album", data.get('album'), True))
+            
+        loop_state = []
+        if data.get('loop_song'): loop_state.append("🔂 Song Loop")
+        if data.get('loop_queue'): loop_state.append("🔁 Queue Loop")
+        if loop_state: fields.append(("Loop", "  •  ".join(loop_state), False))
+        
+        vc_status = "▶️ Playing" if data.get('is_playing') else "⏸️ Paused"
+        fields.append(("Status", vc_status, True))
+        fields.append(("Queue", f"{data.get('queue_length', 0)} song(s) pending", True))
+        
+        embed = make_embed(
+            title="🎵 Now Playing",
+            description=f"**{data.get('song')}**",
+            fields=fields,
+        )
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="shuffle", description="Shuffle the current queue.")
+    async def shuffle(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("shuffle", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'The queue is empty.')))
+            return
+            
+        await interaction.followup.send(embed=success_embed("🔀 Queue Shuffled", f"{data.get('count')} songs reordered."))
+
+    @app_commands.command(name="loop", description="Toggle looping of the current song.")
+    async def loop(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("loop", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
+            return
+            
+        state = "enabled 🔂" if data.get('enabled') else "disabled"
+        await interaction.followup.send(embed=success_embed(f"🔂 Song Loop {state.title()}", f"The current song will {'repeat indefinitely' if data.get('enabled') else 'not repeat'}."))
+
+    @app_commands.command(name="loopqueue", description="Toggle looping of the entire queue.")
+    async def loopqueue(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("loopqueue", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
+            return
+            
+        state = "enabled 🔁" if data.get('enabled') else "disabled"
+        await interaction.followup.send(embed=success_embed(f"🔁 Queue Loop {state.title()}", f"Songs will {'be re-added to the queue after playing' if data.get('enabled') else 'not repeat'}."))
+
+    @app_commands.command(name="volume", description="Set the playback volume.")
+    @app_commands.describe(level="Volume level from 1 to 100")
+    async def volume(self, interaction: discord.Interaction, level: int) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("volume", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None, "level": level})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Volume must be between 1 and 100.')))
+            return
+            
+        await interaction.followup.send(embed=success_embed("🔊 Volume Changed", f"Volume set to **{level}%**."))
+
+    @app_commands.command(name="get", description="Search for and play any song from the internet.")
+    @app_commands.describe(song_name="Song name to search for (e.g. on YouTube).")
+    async def get_song(self, interaction: discord.Interaction, song_name: str) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        if vc is None:
+            await interaction.followup.send(embed=error_embed("You must be in a voice channel to use this command."))
+            return
+
+        payload = {
+            "guild_id": interaction.guild_id,
+            "vc_id": vc.id,
+            "song": song_name
+        }
+        
+        data, status = await _send_to_manager("get", payload)
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
+            return
+            
+        bot_assigned = data.get('assigned_bot', 'Unknown Bot')
+        
+        if data.get('status') == 'enqueued':
+            embed = make_embed(
+                title="➕ Added to Queue (Internet)",
+                description=f"**{data.get('song')}**",
+                fields=[
+                    ("Artist", data.get('artist', 'Unknown'), True),
+                    ("Position in Queue", str(data.get('position', '?')), True),
+                ],
+            )
+        else:
+            embed = make_embed(
+                title="▶️ Now Playing (Internet)",
+                description=f"**{data.get('song')}**",
+                fields=[
+                    ("Artist", data.get('artist', 'Unknown'), True),
+                ],
+            )
+            
+        embed.set_footer(text=f"Handled by {bot_assigned}")
+        await interaction.followup.send(embed=embed)
+
     # Local querying commands that do not need routing
     @app_commands.command(name="search", description="Search the library and show the top matches.")
     @app_commands.describe(query="Search term (song title, artist, or both).")
@@ -279,15 +443,22 @@ class MusicCog(commands.Cog):
         await interaction.response.defer()
 
         commands_info = [
-            ("▶️ /play `<song>`", "Search and play a song"),
+            ("▶️ /play `<song>`", "Search and play a song (fuzzy search)"),
             ("🔍 /search `<query>`", "Show top 10 matching songs"),
             ("🎲 /random", "Play a random song"),
+            ("📋 /queue", "Show the current queue"),
             ("⏭️ /skip", "Skip the current song"),
             ("⏸️ /pause", "Pause playback"),
             ("▶️ /resume", "Resume paused playback"),
             ("⏹️ /stop", "Stop playback and clear queue"),
             ("👋 /disconnect", "Disconnect from voice channel"),
+            ("🎵 /nowplaying", "Show current song details"),
+            ("🔀 /shuffle", "Shuffle the queue"),
+            ("🔂 /loop", "Toggle single-song loop"),
+            ("🔁 /loopqueue", "Toggle full-queue loop"),
             ("🎶 /playlist", "View all available songs in the library"),
+            ("🔊 /volume", "Control the playback volume"),
+            ("🌐 /get `<song>`", "Search and play any song from the internet"),
             ("❓ /help", "Show this message"),
         ]
 
