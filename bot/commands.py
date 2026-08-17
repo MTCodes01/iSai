@@ -23,7 +23,7 @@ from discord.ext import commands
 from bot.music_library import MusicLibrary, Song
 from bot.player import PlayerManager, GuildPlayer
 from bot.yt_stream import search_song
-from bot.config import TOP_SEARCH_RESULTS
+from bot.config import TOP_SEARCH_RESULTS, ASSIGNED_VC_ID
 from bot.utils import (
     make_embed,
     error_embed,
@@ -35,6 +35,9 @@ from bot.utils import (
 log = logging.getLogger("iSai.commands")
 
 
+class WrongVoiceChannelError(app_commands.AppCommandError):
+    pass
+
 # ---------------------------------------------------------------------------
 # Helper — voice channel guard
 # ---------------------------------------------------------------------------
@@ -43,11 +46,14 @@ def _get_voice_channel(interaction: discord.Interaction) -> Optional[discord.Voi
     """
     Return the voice channel the interaction author is currently in,
     or None if they are not in a voice channel.
+    Raises WrongVoiceChannelError if the bot is restricted to a different VC.
     """
     member = interaction.user
     if isinstance(member, discord.Member) and member.voice and member.voice.channel:
         channel = member.voice.channel
         if isinstance(channel, discord.VoiceChannel):
+            if ASSIGNED_VC_ID and str(channel.id) != ASSIGNED_VC_ID:
+                raise WrongVoiceChannelError(f"I am restricted to voice channel <#{ASSIGNED_VC_ID}>.")
             return channel
     return None
 

@@ -29,6 +29,7 @@ from bot.music_library import MusicLibrary
 from bot.player import PlayerManager
 from bot.commands import MusicCog
 from bot.utils import setup_logging
+from bot.ipc import IPCServer
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -62,6 +63,7 @@ class IsSaiBot(commands.Bot):
         )
         self.library: MusicLibrary = MusicLibrary()
         self.player_manager: PlayerManager = PlayerManager()
+        self.ipc_server = IPCServer(self)
 
     async def setup_hook(self) -> None:
         """
@@ -70,6 +72,7 @@ class IsSaiBot(commands.Bot):
         We use this hook to:
           1. Scan the music library (runs in a thread pool to avoid blocking).
           2. Register the MusicCog and sync slash commands with Discord.
+          3. Start the IPC Server if configured.
         """
         log.info("Running setup_hook…")
 
@@ -87,6 +90,13 @@ class IsSaiBot(commands.Bot):
         # For instant sync during testing, pass a specific Guild object.
         synced = await self.tree.sync()
         log.info("Synced %d slash command(s) with Discord.", len(synced))
+        
+        # Start IPC Server
+        await self.ipc_server.start()
+
+    async def close(self) -> None:
+        await self.ipc_server.stop()
+        await super().close()
 
     async def on_ready(self) -> None:
         """Called when the bot has fully connected and is ready to receive events."""
@@ -142,10 +152,15 @@ class IsSaiBot(commands.Bot):
         error: app_commands.AppCommandError,
     ) -> None:
         """Global handler for unhandled slash command errors."""
-        log.error("Unhandled app command error: %s", error, exc_info=True)
+        from bot.commands import WrongVoiceChannelError
+        
+        if isinstance(error, WrongVoiceChannelError):
+            msg = str(error)
+        else:
+            log.error("Unhandled app command error: %s", error, exc_info=True)
+            msg = "An unexpected error occurred. Please try again."
 
         # Try to respond if we haven't already
-        msg = "An unexpected error occurred. Please try again."
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(

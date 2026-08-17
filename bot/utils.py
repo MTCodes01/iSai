@@ -27,11 +27,15 @@ def setup_logging(level: int = logging.INFO) -> logging.Logger:
     Configure and return the root logger for the iSai bot.
 
     Sets up a StreamHandler with a readable format including timestamps,
-    module name, and log level.
+    module name, and log level. If BOT_INSTANCE_ID is present, it is included.
     """
+    import os
+    instance_id = os.getenv("BOT_INSTANCE_ID")
+    prefix = f"[{instance_id}] " if instance_id else ""
+    
     logging.basicConfig(
         level=level,
-        format="%(asctime)s | %(levelname)-8s | %(name)s — %(message)s",
+        format=f"%(asctime)s | %(levelname)-8s | {prefix}%(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     return logging.getLogger("iSai")

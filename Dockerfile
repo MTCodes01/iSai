@@ -20,5 +20,5 @@ COPY . .
 # The music directory will be mounted as a volume
 VOLUME ["/app/music"]
 
-# Run the bot
-CMD ["python", "-m", "bot.bot"]
+# Run the bot manager
+CMD ["python", "manager.py"]

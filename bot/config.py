@@ -18,10 +18,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Discord
+# Discord & Multi-Instance Configuration
 # ---------------------------------------------------------------------------
 TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 """Your Discord bot token. Set via DISCORD_TOKEN in your .env file."""
+
+BOT_INSTANCE_ID: str = os.getenv("BOT_INSTANCE_ID", "")
+"""Identifier for this bot instance, e.g., 'BOT-1'."""
+
+ASSIGNED_VC_ID: str = os.getenv("ASSIGNED_VC_ID", "")
+"""Optional voice channel ID that this bot instance is restricted to."""
+
+IPC_PORT: int = int(os.getenv("IPC_PORT", "0"))
+"""The port on which this instance's IPC HTTP server will listen. 0 means disabled."""
 
 # ---------------------------------------------------------------------------
 # File-system paths
