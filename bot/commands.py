@@ -181,7 +181,8 @@ class MusicCog(commands.Cog):
     @app_commands.command(name="skip", description="Skip the current song.")
     async def skip(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        data, status = await _send_to_manager("skip", {"guild_id": interaction.guild_id})
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("skip", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Nothing is playing.')))
@@ -196,7 +197,8 @@ class MusicCog(commands.Cog):
     @app_commands.command(name="pause", description="Pause playback.")
     async def pause(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        data, status = await _send_to_manager("pause", {"guild_id": interaction.guild_id})
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("pause", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to pause.')))
@@ -207,7 +209,8 @@ class MusicCog(commands.Cog):
     @app_commands.command(name="resume", description="Resume paused playback.")
     async def resume(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        data, status = await _send_to_manager("resume", {"guild_id": interaction.guild_id})
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("resume", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to resume.')))
@@ -218,7 +221,8 @@ class MusicCog(commands.Cog):
     @app_commands.command(name="stop", description="Stop playback and clear the queue.")
     async def stop(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        data, status = await _send_to_manager("stop", {"guild_id": interaction.guild_id})
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("stop", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to stop.')))
@@ -229,7 +233,8 @@ class MusicCog(commands.Cog):
     @app_commands.command(name="disconnect", description="Disconnect the bot from the voice channel.")
     async def disconnect(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        data, status = await _send_to_manager("disconnect", {"guild_id": interaction.guild_id})
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("disconnect", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to disconnect.')))

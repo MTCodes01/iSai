@@ -95,11 +95,19 @@ class ManagerRouter:
                     log.debug("Failed to get status from %s: %s", inst.bot_id, e)
         return statuses
 
-    async def find_bot_for_guild(self, guild_id: str, statuses: Dict[str, dict]) -> Optional[BotInstance]:
-        """Find the bot that is currently handling this guild."""
+    async def find_bot_for_vc(self, guild_id: str, vc_id: str, statuses: Dict[str, dict]) -> Optional[BotInstance]:
+        """Find the bot that is currently in this specific VC."""
         for inst in self.instances:
             bot_status = statuses.get(inst.bot_id, {})
-            if str(guild_id) in bot_status:
+            guild_status = bot_status.get(str(guild_id))
+            if guild_status and guild_status.get('vc_id') == str(vc_id):
+                return inst
+        return None
+
+    async def find_any_bot_in_guild(self, guild_id: str, statuses: Dict[str, dict]) -> Optional[BotInstance]:
+        """Find any bot in this guild (used as fallback)."""
+        for inst in self.instances:
+            if str(guild_id) in statuses.get(inst.bot_id, {}):
                 return inst
         return None
 
@@ -115,16 +123,23 @@ class ManagerRouter:
         data = await request.json()
         command = data.get('command')
         guild_id = str(data.get('guild_id'))
+        vc_id = str(data.get('vc_id')) if data.get('vc_id') else None
         
         statuses = await self.get_all_statuses()
         
-        target_bot = await self.find_bot_for_guild(guild_id, statuses)
+        target_bot = None
+        if vc_id:
+            target_bot = await self.find_bot_for_vc(guild_id, vc_id, statuses)
         
         if command in ('play', 'connect'):
             if not target_bot:
                 target_bot = await self.find_free_bot(statuses)
                 if not target_bot:
                     return web.json_response({'error': 'All bots are currently busy!'}, status=503)
+        else:
+            if not target_bot:
+                # If vc_id wasn't provided or bot not in this VC, try to find any bot in the guild
+                target_bot = await self.find_any_bot_in_guild(guild_id, statuses)
         
         if not target_bot:
             return web.json_response({'error': 'Nothing is playing in this server.'}, status=404)
