@@ -23,6 +23,13 @@ class IPCServer:
             web.post('/pause', self.handle_pause),
             web.post('/resume', self.handle_resume),
             web.post('/skip', self.handle_skip),
+            web.post('/queue', self.handle_queue),
+            web.post('/nowplaying', self.handle_nowplaying),
+            web.post('/shuffle', self.handle_shuffle),
+            web.post('/loop', self.handle_loop),
+            web.post('/loopqueue', self.handle_loopqueue),
+            web.post('/volume', self.handle_volume),
+            web.post('/get', self.handle_get),
             web.get('/status', self.handle_status),
         ])
         self.runner = None
