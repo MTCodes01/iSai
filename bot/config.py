@@ -26,6 +26,12 @@ TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 BOT_INSTANCE_ID: str = os.getenv("BOT_INSTANCE_ID", "")
 """Identifier for this bot instance, e.g., 'BOT-1'."""
 
+IS_MASTER: bool = os.getenv("IS_MASTER", "false").lower() == "true"
+"""True if this bot instance should register slash commands and act as frontend."""
+
+MANAGER_PORT: int = int(os.getenv("MANAGER_PORT", "5000"))
+"""The port on which the central manager API is listening."""
+
 ASSIGNED_VC_ID: str = os.getenv("ASSIGNED_VC_ID", "")
 """Optional voice channel ID that this bot instance is restricted to."""
 

@@ -85,11 +85,17 @@ class IsSaiBot(commands.Bot):
         await self.add_cog(MusicCog(self, self.library, self.player_manager))
         log.info("MusicCog registered.")
 
-        # Sync slash commands with Discord
-        # Using None syncs globally (takes up to 1 hour to propagate).
-        # For instant sync during testing, pass a specific Guild object.
-        synced = await self.tree.sync()
-        log.info("Synced %d slash command(s) with Discord.", len(synced))
+        from bot.config import IS_MASTER
+        if IS_MASTER:
+            # Sync slash commands with Discord
+            # Using None syncs globally (takes up to 1 hour to propagate).
+            synced = await self.tree.sync()
+            log.info("Master bot synced %d slash command(s) with Discord.", len(synced))
+        else:
+            # Clear commands so worker bots don't show up in the menu
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
+            log.info("Worker bot cleared slash commands.")
         
         # Start IPC Server
         await self.ipc_server.start()
