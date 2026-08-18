@@ -30,6 +30,7 @@ class IPCServer:
             web.post('/loopqueue', self.handle_loopqueue),
             web.post('/volume', self.handle_volume),
             web.post('/get', self.handle_get),
+            web.post('/getplaylist', self.handle_getplaylist),
             web.get('/status', self.handle_status),
         ])
         self.runner = None
@@ -292,6 +293,77 @@ class IPCServer:
                 'artist': song.artist, 
                 'duration': song.duration
             })
+
+    async def handle_getplaylist(self, request: web.Request):
+        data = await request.json()
+        guild_id = data.get('guild_id')
+        vc_id = data.get('vc_id')
+        playlist_url = data.get('playlist_url')
+        
+        if not guild_id or not playlist_url or not vc_id:
+            return web.json_response({'error': 'Missing guild_id, vc_id, or playlist_url'}, status=400)
+            
+        player = self.bot.player_manager.get(int(guild_id))
+        
+        if not player.voice_client or not player.voice_client.is_connected():
+            channel = self.bot.get_channel(int(vc_id))
+            if isinstance(channel, discord.VoiceChannel):
+                await player.connect(channel)
+            else:
+                return web.json_response({'error': 'Invalid Voice Channel ID'}, status=400)
+            
+        from bot.yt_stream import search_playlist
+        from bot.music_library import Song
+        
+        entries = await search_playlist(playlist_url)
+        if not entries:
+            return web.json_response({'error': 'Could not fetch playlist or playlist is empty.'}, status=404)
+            
+        added_count = 0
+        first_song = None
+        for info in entries:
+            video_url = info.get("url")
+            if not video_url and info.get("id"):
+                video_url = f"https://www.youtube.com/watch?v={info['id']}"
+            elif video_url and not video_url.startswith("http"):
+                video_url = f"https://www.youtube.com/watch?v={info.get('id', video_url)}"
+                
+            if not video_url:
+                continue
+                
+            song = Song(
+                path=video_url,
+                title=info.get("title", "Unknown Title"),
+                artist=info.get("uploader", "Unknown Artist"),
+                album="Internet Playlist",
+                duration=info.get("duration"),
+                search_key="",
+                is_stream=True,
+                stream_headers=None,
+                is_unresolved=True
+            )
+            added_count += 1
+            if not first_song:
+                first_song = song
+            player.enqueue(song)
+            
+        if added_count == 0:
+            return web.json_response({'error': 'No valid songs found in the playlist.'}, status=404)
+            
+        if player.current is None and not (player.voice_client.is_playing() or player.voice_client.is_paused()):
+            await player.start(None)
+            return web.json_response({
+                'status': 'playing_playlist', 
+                'count': added_count,
+                'first_song': first_song.title
+            })
+        else:
+            return web.json_response({
+                'status': 'enqueued_playlist', 
+                'count': added_count,
+                'first_song': first_song.title
+            })
+
 
     async def handle_status(self, request: web.Request):
         status_data = {}

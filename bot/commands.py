@@ -406,6 +406,49 @@ class MusicCog(commands.Cog):
         embed.set_footer(text=f"Handled by {bot_assigned}")
         await interaction.followup.send(embed=embed)
 
+    @app_commands.command(name="getplaylist", description="Add all songs from a YouTube playlist to the queue.")
+    @app_commands.describe(playlist_url="YouTube playlist link.")
+    async def getplaylist(self, interaction: discord.Interaction, playlist_url: str) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        if vc is None:
+            await interaction.followup.send(embed=error_embed("You must be in a voice channel to use this command."))
+            return
+
+        payload = {
+            "guild_id": interaction.guild_id,
+            "vc_id": vc.id,
+            "playlist_url": playlist_url
+        }
+        
+        data, status = await _send_to_manager("getplaylist", payload)
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
+            return
+            
+        bot_assigned = data.get('assigned_bot', 'Unknown Bot')
+        
+        if data.get('status') == 'enqueued_playlist':
+            embed = make_embed(
+                title="➕ Added Playlist to Queue",
+                description=f"Added **{data.get('count')}** songs.",
+                fields=[
+                    ("First Song", data.get('first_song', 'Unknown'), True),
+                ],
+            )
+        else:
+            embed = make_embed(
+                title="▶️ Playing Playlist",
+                description=f"Added **{data.get('count')}** songs.",
+                fields=[
+                    ("Now Playing", data.get('first_song', 'Unknown'), True),
+                ],
+            )
+            
+        embed.set_footer(text=f"Handled by {bot_assigned}")
+        await interaction.followup.send(embed=embed)
+
     # Local querying commands that do not need routing
     @app_commands.command(name="search", description="Search the library and show the top matches.")
     @app_commands.describe(query="Search term (song title, artist, or both).")
@@ -459,6 +502,7 @@ class MusicCog(commands.Cog):
             ("🎶 /playlist", "View all available songs in the library"),
             ("🔊 /volume", "Control the playback volume"),
             ("🌐 /get `<song>`", "Search and play any song from the internet"),
+            ("🎶 /getplaylist `<url>`", "Add all songs from a YouTube playlist to the queue"),
             ("❓ /help", "Show this message"),
         ]
 

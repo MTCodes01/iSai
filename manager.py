@@ -131,7 +131,7 @@ class ManagerRouter:
         if vc_id:
             target_bot = await self.find_bot_for_vc(guild_id, vc_id, statuses)
         
-        if command in ('play', 'connect', 'get'):
+        if command in ('play', 'connect', 'get', 'getplaylist'):
             if not target_bot:
                 target_bot = await self.find_free_bot(statuses)
                 if not target_bot:

@@ -278,6 +278,18 @@ class GuildPlayer:
             return
 
         try:
+            if getattr(song, "is_unresolved", False):
+                from bot.yt_stream import search_song
+                log.info("Resolving stream URL for '%s'...", song.title)
+                info = await search_song(song.path)
+                if info and "url" in info:
+                    song.path = info["url"]
+                    song.stream_headers = info.get("http_headers")
+                    song.duration = info.get("duration", song.duration)
+                    song.is_unresolved = False
+                else:
+                    raise Exception(f"Could not resolve stream URL for {song.path}")
+
             options = dict(FFMPEG_OPTIONS)
             if song.is_stream:
                 import shlex
