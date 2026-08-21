@@ -26,7 +26,7 @@ import discord
 from discord.ext import commands
 
 from bot.config import FFMPEG_PATH, DEFAULT_VOLUME
-from bot.music_library import Song
+from bot.music_library import Song, MusicLibrary
 
 log = logging.getLogger("iSai.player")
 
@@ -73,8 +73,9 @@ class GuildPlayer:
         Playback volume (0.0 – 1.0).
     """
 
-    def __init__(self, guild_id: int) -> None:
+    def __init__(self, guild_id: int, library: Optional[MusicLibrary] = None) -> None:
         self.guild_id: int = guild_id
+        self.library: Optional[MusicLibrary] = library
         self.voice_client: Optional[discord.VoiceClient] = None
 
         # Use a deque for O(1) popleft (next song) and append (queue song)
@@ -83,6 +84,8 @@ class GuildPlayer:
         self.current: Optional[Song] = None
         self.loop_song: bool = False
         self.loop_queue: bool = False
+        self.autoplay: bool = False
+        self.history: deque[Song] = deque(maxlen=10)
         self.volume: float = DEFAULT_VOLUME
 
         # Internal flag: prevents two concurrent _play_next tasks
@@ -114,6 +117,8 @@ class GuildPlayer:
         self.current = None
         self.loop_song = False
         self.loop_queue = False
+        self.autoplay = False
+        self.history.clear()
         self._playing = False
 
         if self.voice_client:
@@ -256,6 +261,13 @@ class GuildPlayer:
             if self.loop_queue and self.current:
                 self.queue.append(self.current)
             next_song = self.queue.popleft()
+        elif self.autoplay and self.library:
+            next_song = self._get_autoplay_song()
+            if not next_song:
+                self._playing = False
+                self.current = None
+                log.info("[Guild %d] Queue finished and autoplay found no songs.", self.guild_id)
+                return
         else:
             # Queue exhausted
             self._playing = False
@@ -263,9 +275,37 @@ class GuildPlayer:
             log.info("[Guild %d] Queue finished.", self.guild_id)
             return
 
+        if next_song != self.current or not self.loop_song:
+            self.history.append(next_song)
+
         self.current = next_song
         self._playing = True
         await self._stream(next_song, text_channel)
+
+    def _get_autoplay_song(self) -> Optional[Song]:
+        if not self.library:
+            return None
+
+        # Gather artists from recent history (excluding unresolved internet streams)
+        recent_artists = list({song.artist for song in self.history if not getattr(song, 'is_stream', False)})
+        
+        history_paths = {song.path for song in self.history}
+
+        if recent_artists:
+            chosen_artist = random.choice(recent_artists)
+            # Find all songs by this artist (using search with high limit)
+            results = self.library.search(chosen_artist, limit=100, threshold=50)
+            
+            valid_songs = [s for s, score in results if s.path not in history_paths]
+            if valid_songs:
+                return random.choice(valid_songs)
+        
+        # Fallback: completely random song not in history
+        all_valid = [s for s in self.library.songs if s.path not in history_paths]
+        if all_valid:
+            return random.choice(all_valid)
+            
+        return self.library.get_random()
 
     async def _stream(self, song: Song, text_channel: discord.TextChannel) -> None:
         """
@@ -341,13 +381,14 @@ class PlayerManager:
         player = manager.get(guild_id)
     """
 
-    def __init__(self) -> None:
+    def __init__(self, library: Optional[MusicLibrary] = None) -> None:
+        self.library = library
         self._players: dict[int, GuildPlayer] = {}
 
     def get(self, guild_id: int) -> GuildPlayer:
         """Return the GuildPlayer for *guild_id*, creating one if needed."""
         if guild_id not in self._players:
-            self._players[guild_id] = GuildPlayer(guild_id)
+            self._players[guild_id] = GuildPlayer(guild_id, self.library)
             log.debug("Created new GuildPlayer for guild %d", guild_id)
         return self._players[guild_id]
 

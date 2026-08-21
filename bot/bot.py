@@ -62,7 +62,7 @@ class IsSaiBot(commands.Bot):
             help_command=None,    # We have a custom /help slash command
         )
         self.library: MusicLibrary = MusicLibrary()
-        self.player_manager: PlayerManager = PlayerManager()
+        self.player_manager: PlayerManager = PlayerManager(self.library)
         self.ipc_server = IPCServer(self)
 
     async def setup_hook(self) -> None:

@@ -269,6 +269,7 @@ class MusicCog(commands.Cog):
         footer_parts = []
         if data.get('loop_song'): footer_parts.append("🔂 Looping current song")
         if data.get('loop_queue'): footer_parts.append("🔁 Looping queue")
+        if data.get('autoplay'): footer_parts.append("📻 Autoplay enabled")
         
         embed = make_embed(
             title=f"📋 Queue — {data.get('queue_length', 0)} song(s) pending",
@@ -298,7 +299,8 @@ class MusicCog(commands.Cog):
         loop_state = []
         if data.get('loop_song'): loop_state.append("🔂 Song Loop")
         if data.get('loop_queue'): loop_state.append("🔁 Queue Loop")
-        if loop_state: fields.append(("Loop", "  •  ".join(loop_state), False))
+        if data.get('autoplay'): loop_state.append("📻 Autoplay")
+        if loop_state: fields.append(("Features", "  •  ".join(loop_state), False))
         
         vc_status = "▶️ Playing" if data.get('is_playing') else "⏸️ Paused"
         fields.append(("Status", vc_status, True))
@@ -348,6 +350,19 @@ class MusicCog(commands.Cog):
             
         state = "enabled 🔁" if data.get('enabled') else "disabled"
         await interaction.followup.send(embed=success_embed(f"🔁 Queue Loop {state.title()}", f"Songs will {'be re-added to the queue after playing' if data.get('enabled') else 'not repeat'}."))
+
+    @app_commands.command(name="autoplay", description="Toggle autoplay to automatically play similar songs when the queue ends.")
+    async def autoplay(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("autoplay", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle autoplay.')))
+            return
+            
+        state = "enabled 📻" if data.get('enabled') else "disabled"
+        await interaction.followup.send(embed=success_embed(f"📻 Autoplay {state.title()}", f"The bot will {'now play similar songs when the queue ends' if data.get('enabled') else 'stop playing when the queue ends'}."))
 
     @app_commands.command(name="volume", description="Set the playback volume.")
     @app_commands.describe(level="Volume level from 1 to 100")
@@ -499,6 +514,7 @@ class MusicCog(commands.Cog):
             ("🔀 /shuffle", "Shuffle the queue"),
             ("🔂 /loop", "Toggle single-song loop"),
             ("🔁 /loopqueue", "Toggle full-queue loop"),
+            ("📻 /autoplay", "Toggle playing similar songs when the queue ends"),
             ("🎶 /playlist", "View all available songs in the library"),
             ("🔊 /volume", "Control the playback volume"),
             ("🌐 /get `<song>`", "Search and play any song from the internet"),

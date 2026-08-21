@@ -28,6 +28,7 @@ class IPCServer:
             web.post('/shuffle', self.handle_shuffle),
             web.post('/loop', self.handle_loop),
             web.post('/loopqueue', self.handle_loopqueue),
+            web.post('/autoplay', self.handle_autoplay),
             web.post('/volume', self.handle_volume),
             web.post('/get', self.handle_get),
             web.post('/getplaylist', self.handle_getplaylist),
@@ -181,7 +182,8 @@ class IPCServer:
             'queue': queue_data,
             'queue_length': len(player.queue),
             'loop_song': player.loop_song,
-            'loop_queue': player.loop_queue
+            'loop_queue': player.loop_queue,
+            'autoplay': player.autoplay
         })
 
     async def handle_nowplaying(self, request: web.Request):
@@ -199,6 +201,7 @@ class IPCServer:
             'duration': player.current.duration,
             'loop_song': player.loop_song,
             'loop_queue': player.loop_queue,
+            'autoplay': player.autoplay,
             'is_playing': player.voice_client.is_playing() if player.voice_client else False,
             'queue_length': len(player.queue)
         })
@@ -226,6 +229,13 @@ class IPCServer:
         player = self.bot.player_manager.get(int(guild_id))
         player.loop_queue = not player.loop_queue
         return web.json_response({'status': 'loopqueue_toggled', 'enabled': player.loop_queue})
+
+    async def handle_autoplay(self, request: web.Request):
+        data = await request.json()
+        guild_id = data.get('guild_id')
+        player = self.bot.player_manager.get(int(guild_id))
+        player.autoplay = not player.autoplay
+        return web.json_response({'status': 'autoplay_toggled', 'enabled': player.autoplay})
 
     async def handle_volume(self, request: web.Request):
         data = await request.json()
@@ -374,6 +384,7 @@ class IPCServer:
                     'playing': player.voice_client.is_playing(),
                     'paused': player.voice_client.is_paused(),
                     'current': player.current.title if player.current else None,
-                    'queue_length': len(player.queue)
+                    'queue_length': len(player.queue),
+                    'autoplay': player.autoplay
                 }
         return web.json_response({'status': 'ok', 'players': status_data})
