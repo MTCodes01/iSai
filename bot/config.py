@@ -58,13 +58,16 @@ Path to the ffmpeg executable.
 # Playback
 # ---------------------------------------------------------------------------
 DEFAULT_VOLUME: float = float(os.getenv("DEFAULT_VOLUME", "0.5"))
-"""Default playback volume (0.0 – 1.0)."""
+"""Default playback volume (0.0 - 1.0)."""
 
 # ---------------------------------------------------------------------------
-# Cache
+# Cache & Database
 # ---------------------------------------------------------------------------
 CACHE_FILE: Path = _PROJECT_ROOT / ".music_cache.json"
 """JSON file used to persist the scanned music index across restarts."""
+
+DB_FILE: Path = _PROJECT_ROOT / "iSai_bot.db"
+"""SQLite database file for persisting queues and player state."""
 
 # ---------------------------------------------------------------------------
 # Search

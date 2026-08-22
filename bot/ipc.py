@@ -194,7 +194,7 @@ class IPCServer:
         guild_id = data.get('guild_id')
         player = self.bot.player_manager.get(int(guild_id))
         
-        if player.current is None and not player.queue:
+        if player.current is None and player.queue_length == 0:
             return web.json_response({'error': 'The queue is empty.'}, status=400)
             
         queue_data = []
@@ -204,7 +204,7 @@ class IPCServer:
         return web.json_response({
             'current': {'title': player.current.title, 'artist': player.current.artist, 'duration': player.current.duration} if player.current else None,
             'queue': queue_data,
-            'queue_length': len(player.queue),
+            'queue_length': player.queue_length,
             'loop_song': player.loop_song,
             'loop_queue': player.loop_queue,
             'autoplay': player.autoplay
@@ -227,18 +227,18 @@ class IPCServer:
             'loop_queue': player.loop_queue,
             'autoplay': player.autoplay,
             'is_playing': player.voice_client.is_playing() if player.voice_client else False,
-            'queue_length': len(player.queue)
+            'queue_length': player.queue_length
         })
 
     async def handle_shuffle(self, request: web.Request):
         data = await request.json()
         guild_id = data.get('guild_id')
         player = self.bot.player_manager.get(int(guild_id))
-        if not player.queue:
+        if player.queue_length == 0:
             return web.json_response({'error': 'The queue is empty.'}, status=400)
             
         player.shuffle_queue()
-        return web.json_response({'status': 'shuffled', 'count': len(player.queue)})
+        return web.json_response({'status': 'shuffled', 'count': player.queue_length})
 
     async def handle_loop(self, request: web.Request):
         data = await request.json()
@@ -408,7 +408,7 @@ class IPCServer:
                     'playing': player.voice_client.is_playing(),
                     'paused': player.voice_client.is_paused(),
                     'current': player.current.title if player.current else None,
-                    'queue_length': len(player.queue),
+                    'queue_length': player.queue_length,
                     'autoplay': player.autoplay
                 }
         return web.json_response({'status': 'ok', 'players': status_data})

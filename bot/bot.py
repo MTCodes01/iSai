@@ -81,6 +81,10 @@ class IsSaiBot(commands.Bot):
         count = await loop.run_in_executor(None, self.library.scan)
         log.info("Music library ready: %d songs indexed.", count)
 
+        # Initialize SQLite database
+        from bot.db import init_db
+        init_db()
+
         # Register the Cog containing all slash commands
         await self.add_cog(MusicCog(self, self.library, self.player_manager))
         log.info("MusicCog registered.")
