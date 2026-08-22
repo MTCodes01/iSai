@@ -93,6 +93,150 @@ class PlaylistPagination(discord.ui.View):
         await interaction.response.edit_message(embed=self.format_page(), view=self)
 
 
+
+
+class QueuePagination(discord.ui.View):
+    def __init__(self, data: dict, guild_id: int, vc_id: Optional[int]):
+        super().__init__(timeout=180)
+        self.data = data
+        self.guild_id = guild_id
+        self.vc_id = vc_id
+        
+        self.queue_items = data.get('queue', [])
+        self.current_page = 0
+        self.max_page = max(0, (len(self.queue_items) - 1) // 10)
+        self.update_buttons()
+
+    def format_page(self) -> discord.Embed:
+        lines = []
+        if self.data.get('current'):
+            curr = self.data['current']
+            status_icon = "🔂" if self.data.get('loop_song') else "▶️"
+            lines.append(f"{status_icon} **Now Playing:** {curr.get('title')} — *{curr.get('artist')}* `[{format_duration(curr.get('duration'))}]`")
+            
+        if self.queue_items:
+            lines.append("")
+            lines.append("**Up Next:**")
+            
+            start = self.current_page * 10
+            end = start + 10
+            page_items = self.queue_items[start:end]
+            
+            for i, q in enumerate(page_items, start=start + 1):
+                lines.append(f"`{i}.` **{q.get('title')}** — *{q.get('artist')}* `[{format_duration(q.get('duration'))}]`")
+                
+        footer_parts = []
+        if self.data.get('loop_song'): footer_parts.append("🔂 Looping current song")
+        if self.data.get('loop_queue'): footer_parts.append("🔁 Looping queue")
+        if self.data.get('autoplay'): footer_parts.append("📻 Autoplay enabled")
+        
+        embed = make_embed(
+            title=f"📋 Queue — {self.data.get('queue_length', 0)} song(s) pending",
+            description="\n".join(lines) if lines else "Queue is empty.",
+        )
+        if footer_parts:
+            embed.set_footer(text="  •  ".join(footer_parts))
+        
+        if self.max_page > 0:
+            if embed.footer and embed.footer.text:
+                embed.set_footer(text=f"{embed.footer.text}  |  Page {self.current_page + 1}/{self.max_page + 1}")
+            else:
+                embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_page + 1}")
+                
+        return embed
+
+    def update_buttons(self):
+        self.prev_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page == self.max_page
+
+    @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.primary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.format_page(), view=self)
+
+    @discord.ui.button(label="Next Page", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.format_page(), view=self)
+
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data, status = await _send_to_manager("queue", {"guild_id": self.guild_id, "vc_id": self.vc_id})
+        if status == 200:
+            self.data = data
+            self.queue_items = data.get('queue', [])
+            self.max_page = max(0, (len(self.queue_items) - 1) // 10)
+            self.current_page = min(self.current_page, self.max_page)
+            self.update_buttons()
+            await interaction.response.edit_message(embed=self.format_page(), view=self)
+        else:
+            await interaction.response.send_message(embed=error_embed("Failed to refresh queue."), ephemeral=True)
+
+
+class PlayerControls(discord.ui.View):
+    def __init__(self, guild_id: int, vc_id: Optional[int]):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        self.vc_id = vc_id
+
+    async def _send(self, interaction: discord.Interaction, command: str, success_msg: str = ""):
+        await interaction.response.defer()
+        payload = {"guild_id": self.guild_id, "vc_id": self.vc_id}
+        data, status = await _send_to_manager(command, payload)
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'Action failed.')), ephemeral=True)
+        else:
+            msg = success_msg or f"Action '{command}' successful."
+            if command == "skip" and data.get("song"):
+                msg = f"⏭️ Skipped to **{data['song']}**"
+            elif command == "prev" and data.get("song"):
+                msg = f"⏮️ Playing previous: **{data['song']}**"
+            elif command == "loopqueue":
+                msg = "🔁 Queue Loop enabled" if data.get('enabled') else "🔁 Queue Loop disabled"
+            elif command == "autoplay":
+                msg = "📻 Autoplay enabled" if data.get('enabled') else "📻 Autoplay disabled"
+            await interaction.followup.send(embed=success_embed(msg))
+
+    @discord.ui.button(label="Play/Pause", style=discord.ButtonStyle.primary, emoji="⏯️")
+    async def play_pause(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        payload = {"guild_id": self.guild_id, "vc_id": self.vc_id}
+        data, status = await _send_to_manager("pause", payload)
+        if status == 200:
+            await interaction.followup.send(embed=success_embed("⏸️ Paused"))
+            return
+            
+        data, status = await _send_to_manager("resume", payload)
+        if status == 200:
+            await interaction.followup.send(embed=success_embed("▶️ Resumed"))
+            return
+            
+        await interaction.followup.send(embed=error_embed("Failed to play/pause."), ephemeral=True)
+
+    @discord.ui.button(label="Prev", style=discord.ButtonStyle.secondary, emoji="⏮️")
+    async def prev_song(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send(interaction, "prev")
+
+    @discord.ui.button(label="Skip", style=discord.ButtonStyle.secondary, emoji="⏭️")
+    async def skip_song(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send(interaction, "skip")
+
+    @discord.ui.button(label="Loop Q", style=discord.ButtonStyle.secondary, emoji="🔁")
+    async def loop_queue(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send(interaction, "loopqueue")
+        
+    @discord.ui.button(label="Autoplay", style=discord.ButtonStyle.secondary, emoji="📻")
+    async def autoplay(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send(interaction, "autoplay")
+
+    @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger, emoji="⏹️")
+    async def stop_player(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._send(interaction, "stop", success_msg="⏹️ Stopped playback and cleared queue.")
+
+
 class MusicCog(commands.Cog):
     def __init__(self, bot: commands.Bot, library: MusicLibrary, manager: PlayerManager) -> None:
         self.bot = bot
@@ -111,7 +255,7 @@ class MusicCog(commands.Cog):
 
         payload = {
             "guild_id": interaction.guild_id,
-            "vc_id": vc.id,
+            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
             "song": song
         }
         
@@ -142,7 +286,7 @@ class MusicCog(commands.Cog):
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
 
     @app_commands.command(name="random", description="Play a random song from the library.")
     async def random(self, interaction: discord.Interaction) -> None:
@@ -156,7 +300,7 @@ class MusicCog(commands.Cog):
         # Passing "random" as query, since the IPC falls back to random if not found
         payload = {
             "guild_id": interaction.guild_id,
-            "vc_id": vc.id,
+            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
             "song": "random_fallback_query_12345" 
         }
         
@@ -176,13 +320,30 @@ class MusicCog(commands.Cog):
             ],
         )
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+
+
+    @app_commands.command(name="prev", description="Play the previous song.")
+    async def prev(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        vc = _get_voice_channel(interaction)
+        data, status = await _send_to_manager("prev", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+        
+        if status != 200:
+            await interaction.followup.send(embed=error_embed(data.get('error', 'No previous song.')))
+            return
+            
+        embed = success_embed(
+            title="⏮️ Playing Previous",
+            description=f"**{data.get('song')}** — *{data.get('artist')}*" if data.get('song') else "Playing previous track.",
+        )
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
 
     @app_commands.command(name="skip", description="Skip the current song.")
     async def skip(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("skip", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("skip", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Nothing is playing.')))
@@ -192,13 +353,13 @@ class MusicCog(commands.Cog):
             title="⏭️ Skipped",
             description=f"**{data.get('song')}** — *{data.get('artist')}*" if data.get('song') else "Track skipped.",
         )
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
 
     @app_commands.command(name="pause", description="Pause playback.")
     async def pause(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("pause", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("pause", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to pause.')))
@@ -210,7 +371,7 @@ class MusicCog(commands.Cog):
     async def resume(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("resume", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("resume", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to resume.')))
@@ -222,7 +383,7 @@ class MusicCog(commands.Cog):
     async def stop(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("stop", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("stop", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to stop.')))
@@ -234,7 +395,7 @@ class MusicCog(commands.Cog):
     async def disconnect(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("disconnect", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("disconnect", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to disconnect.')))
@@ -246,44 +407,20 @@ class MusicCog(commands.Cog):
     async def queue(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("queue", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("queue", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'The queue is empty.')))
             return
             
-        lines = []
-        if data.get('current'):
-            curr = data['current']
-            status_icon = "🔂" if data.get('loop_song') else "▶️"
-            lines.append(f"{status_icon} **Now Playing:** {curr.get('title')} — *{curr.get('artist')}* `[{format_duration(curr.get('duration'))}]`")
-            
-        if data.get('queue'):
-            lines.append("")
-            lines.append("**Up Next:**")
-            for i, q in enumerate(data['queue'], start=1):
-                lines.append(f"`{i}.` **{q.get('title')}** — *{q.get('artist')}* `[{format_duration(q.get('duration'))}]`")
-            if data.get('queue_length', 0) > 20:
-                lines.append(f"*… and {data['queue_length'] - 20} more songs*")
-                
-        footer_parts = []
-        if data.get('loop_song'): footer_parts.append("🔂 Looping current song")
-        if data.get('loop_queue'): footer_parts.append("🔁 Looping queue")
-        if data.get('autoplay'): footer_parts.append("📻 Autoplay enabled")
-        
-        embed = make_embed(
-            title=f"📋 Queue — {data.get('queue_length', 0)} song(s) pending",
-            description="\n".join(lines),
-        )
-        if footer_parts:
-            embed.set_footer(text="  •  ".join(footer_parts))
-        await interaction.followup.send(embed=embed)
+        view = QueuePagination(data, interaction.guild_id, vc.id if vc else None)
+        await interaction.followup.send(embed=view.format_page(), view=view)
 
     @app_commands.command(name="nowplaying", description="Show information about the current song.")
     async def nowplaying(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("nowplaying", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("nowplaying", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=make_embed(title="🎵 Now Playing", description="Nothing is playing right now. Use `/play` to start!"))
@@ -311,13 +448,13 @@ class MusicCog(commands.Cog):
             description=f"**{data.get('song')}**",
             fields=fields,
         )
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
 
     @app_commands.command(name="shuffle", description="Shuffle the current queue.")
     async def shuffle(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("shuffle", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("shuffle", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'The queue is empty.')))
@@ -329,7 +466,7 @@ class MusicCog(commands.Cog):
     async def loop(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("loop", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("loop", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
@@ -342,7 +479,7 @@ class MusicCog(commands.Cog):
     async def loopqueue(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("loopqueue", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("loopqueue", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
@@ -355,7 +492,7 @@ class MusicCog(commands.Cog):
     async def autoplay(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("autoplay", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None})
+        data, status = await _send_to_manager("autoplay", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle autoplay.')))
@@ -369,7 +506,7 @@ class MusicCog(commands.Cog):
     async def volume(self, interaction: discord.Interaction, level: int) -> None:
         await interaction.response.defer()
         vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("volume", {"guild_id": interaction.guild_id, "vc_id": vc.id if vc else None, "level": level})
+        data, status = await _send_to_manager("volume", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None, "level": level})
         
         if status != 200:
             await interaction.followup.send(embed=error_embed(data.get('error', 'Volume must be between 1 and 100.')))
@@ -388,7 +525,7 @@ class MusicCog(commands.Cog):
 
         payload = {
             "guild_id": interaction.guild_id,
-            "vc_id": vc.id,
+            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
             "song": song_name
         }
         
@@ -419,7 +556,7 @@ class MusicCog(commands.Cog):
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
 
     @app_commands.command(name="getplaylist", description="Add all songs from a YouTube playlist to the queue.")
     @app_commands.describe(playlist_url="YouTube playlist link.")
@@ -432,7 +569,7 @@ class MusicCog(commands.Cog):
 
         payload = {
             "guild_id": interaction.guild_id,
-            "vc_id": vc.id,
+            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
             "playlist_url": playlist_url
         }
         
@@ -462,7 +599,7 @@ class MusicCog(commands.Cog):
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
 
     # Local querying commands that do not need routing
     @app_commands.command(name="search", description="Search the library and show the top matches.")
@@ -494,7 +631,7 @@ class MusicCog(commands.Cog):
             return
             
         view = PlaylistPagination(songs)
-        await interaction.response.send_message(embed=view.format_page(), view=view)
+        await interaction.response.send_message(embed=view.format_page(), view=view)  # NOREPLACE
 
     @app_commands.command(name="help", description="Show all available iSai commands.")
     async def help(self, interaction: discord.Interaction) -> None:

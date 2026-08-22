@@ -90,6 +90,7 @@ class GuildPlayer:
 
         # Internal flag: prevents two concurrent _play_next tasks
         self._playing: bool = False
+        self._is_manual_stop: bool = False
 
         # asyncio loop reference — set when first needed
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -123,7 +124,8 @@ class GuildPlayer:
 
         if self.voice_client:
             if self.voice_client.is_playing() or self.voice_client.is_paused():
-                self.voice_client.stop()
+                self._is_manual_stop = True
+            self.voice_client.stop()
             await self.voice_client.disconnect()
             self.voice_client = None
 
@@ -192,12 +194,42 @@ class GuildPlayer:
 
         if self.voice_client and self.voice_client.is_playing():
             # stop() will trigger the 'after' callback which calls _play_next
+            self._is_manual_stop = True
             self.voice_client.stop()
         else:
             await self._play_next(text_channel)
 
         self.loop_song = was_looping
         return skipped
+
+    async def prev(self, text_channel: discord.TextChannel) -> Optional[Song]:
+        """
+        Play the previous song from history.
+
+        Returns the song that was previously played, or None if no history.
+        """
+        if not self.history:
+            return None
+            
+        prev_song = self.history.pop()
+        
+        was_looping = self.loop_song
+        self.loop_song = False
+        
+        if self.current:
+            self.queue.appendleft(self.current)
+            self.current = None
+            
+        self.queue.appendleft(prev_song)
+        
+        if self.voice_client and self.voice_client.is_playing():
+            self._is_manual_stop = True
+            self.voice_client.stop()
+        else:
+            await self._play_next(text_channel)
+            
+        self.loop_song = was_looping
+        return prev_song
 
     async def stop(self) -> None:
         """Stop playback and clear the queue (but stay connected)."""
@@ -208,7 +240,8 @@ class GuildPlayer:
 
         if self.voice_client:
             if self.voice_client.is_playing() or self.voice_client.is_paused():
-                self.voice_client.stop()
+                self._is_manual_stop = True
+            self.voice_client.stop()
 
     def pause(self) -> bool:
         """
@@ -236,7 +269,7 @@ class GuildPlayer:
     # Internal playback engine
     # ------------------------------------------------------------------
 
-    async def _play_next(self, text_channel: discord.TextChannel) -> None:
+    async def _play_next(self, text_channel: discord.TextChannel, auto_next: bool = False) -> None:
         """
         Attempt to play the next song in the queue.
 
@@ -280,6 +313,32 @@ class GuildPlayer:
 
         self.current = next_song
         self._playing = True
+        
+        if auto_next and text_channel:
+            try:
+                from bot.commands import PlayerControls
+                from bot.utils import make_embed, format_duration
+                
+                fields = [
+                    ("Artist", next_song.artist, True),
+                    ("Duration", format_duration(next_song.duration) if next_song.duration else "Unknown", True),
+                ]
+                if next_song.album and next_song.album != 'Unknown Album':
+                    fields.append(("Album", next_song.album, True))
+                
+                embed = make_embed(
+                    title="▶️ Now Playing",
+                    description=f"**{next_song.title}**",
+                    fields=fields,
+                )
+                
+                asyncio.run_coroutine_threadsafe(
+                    text_channel.send(embed=embed, view=PlayerControls(self.guild_id, self.voice_client.channel.id if self.voice_client else None)),
+                    self._loop
+                )
+            except Exception as e:
+                log.error("Failed to send Now Playing message: %s", e)
+
         await self._stream(next_song, text_channel)
 
     def _get_autoplay_song(self) -> Optional[Song]:
@@ -361,7 +420,9 @@ class GuildPlayer:
                 log.error("Playback error for '%s': %s", song.title, error)
 
             if self._loop:
-                coro = self._play_next(text_channel)
+                is_manual = getattr(self, '_is_manual_stop', False)
+                self._is_manual_stop = False
+                coro = self._play_next(text_channel, auto_next=not is_manual)
                 asyncio.run_coroutine_threadsafe(coro, self._loop)
 
         self.voice_client.play(source, after=after_callback)

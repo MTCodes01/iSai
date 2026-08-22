@@ -12,6 +12,14 @@ from bot.config import IPC_PORT
 log = logging.getLogger("iSai.IPC")
 
 class IPCServer:
+
+    def _get_text_channel(self, data: dict):
+        text_channel_id = data.get('text_channel_id')
+        if text_channel_id:
+            channel = self.bot.get_channel(int(text_channel_id))
+            if isinstance(channel, discord.TextChannel):
+                return channel
+        return None
     def __init__(self, bot: discord.ext.commands.Bot):
         self.bot = bot
         self.app = web.Application()
@@ -23,6 +31,7 @@ class IPCServer:
             web.post('/pause', self.handle_pause),
             web.post('/resume', self.handle_resume),
             web.post('/skip', self.handle_skip),
+            web.post('/prev', self.handle_prev),
             web.post('/queue', self.handle_queue),
             web.post('/nowplaying', self.handle_nowplaying),
             web.post('/shuffle', self.handle_shuffle),
@@ -117,7 +126,7 @@ class IPCServer:
             })
         else:
             player.enqueue(best_song)
-            await player.start(None)
+            await player.start(self._get_text_channel(data))
             return web.json_response({
                 'status': 'playing', 
                 'song': best_song.title,
@@ -158,11 +167,26 @@ class IPCServer:
         if not player.current:
             return web.json_response({'error': 'Nothing is playing'}, status=400)
             
-        skipped = await player.skip(None)
+        skipped = await player.skip(self._get_text_channel(data))
         return web.json_response({
             'status': 'skipped', 
             'song': skipped.title if skipped else None,
             'artist': skipped.artist if skipped else None
+        })
+
+    async def handle_prev(self, request: web.Request):
+        data = await request.json()
+        guild_id = data.get('guild_id')
+        player = self.bot.player_manager.get(int(guild_id))
+        
+        if not player.history:
+            return web.json_response({'error': 'No previous song in history'}, status=400)
+            
+        prev_song = await player.prev(self._get_text_channel(data))
+        return web.json_response({
+            'status': 'played_prev', 
+            'song': prev_song.title if prev_song else None,
+            'artist': prev_song.artist if prev_song else None
         })
 
     async def handle_queue(self, request: web.Request):
@@ -174,7 +198,7 @@ class IPCServer:
             return web.json_response({'error': 'The queue is empty.'}, status=400)
             
         queue_data = []
-        for s in list(player.queue)[:20]:
+        for s in list(player.queue):
             queue_data.append({'title': s.title, 'artist': s.artist, 'duration': s.duration})
             
         return web.json_response({
@@ -296,7 +320,7 @@ class IPCServer:
             })
         else:
             player.enqueue(song)
-            await player.start(None)
+            await player.start(self._get_text_channel(data))
             return web.json_response({
                 'status': 'playing', 
                 'song': song.title,
@@ -361,7 +385,7 @@ class IPCServer:
             return web.json_response({'error': 'No valid songs found in the playlist.'}, status=404)
             
         if player.current is None and not (player.voice_client.is_playing() or player.voice_client.is_paused()):
-            await player.start(None)
+            await player.start(self._get_text_channel(data))
             return web.json_response({
                 'status': 'playing_playlist', 
                 'count': added_count,
