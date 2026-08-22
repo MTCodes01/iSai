@@ -109,6 +109,14 @@ class GuildPlayer:
         db.update_player_state(self.guild_id, autoplay=value)
         
     @property
+    def text_channel_id(self) -> Optional[int]:
+        return db.get_player_state(self.guild_id).get('text_channel_id')
+        
+    @text_channel_id.setter
+    def text_channel_id(self, value: Optional[int]):
+        db.update_player_state(self.guild_id, text_channel_id=value)
+        
+    @property
     def volume(self) -> float:
         return db.get_player_state(self.guild_id).get('volume', DEFAULT_VOLUME)
 
@@ -165,15 +173,15 @@ class GuildPlayer:
     # Playback control
     # ------------------------------------------------------------------
 
-    async def play(self, song: Song, text_channel: discord.TextChannel) -> None:
+    async def play(self, song: Song, text_channel: discord.TextChannel = None) -> None:
         self.current = song
         await self._stream(song, text_channel)
 
-    async def start(self, text_channel: discord.TextChannel) -> None:
+    async def start(self, text_channel: discord.TextChannel = None) -> None:
         if not self._playing:
             await self._play_next(text_channel)
 
-    async def skip(self, text_channel: discord.TextChannel) -> Optional[Song]:
+    async def skip(self, text_channel: discord.TextChannel = None) -> Optional[Song]:
         skipped = self.current
         was_looping = self.loop_song
         self.loop_song = False
@@ -187,7 +195,7 @@ class GuildPlayer:
         self.loop_song = was_looping
         return skipped
 
-    async def prev(self, text_channel: discord.TextChannel) -> Optional[Song]:
+    async def prev(self, text_channel: discord.TextChannel = None) -> Optional[Song]:
         prev_song = db.pop_history(self.guild_id)
         if not prev_song:
             return None
@@ -238,10 +246,15 @@ class GuildPlayer:
     # Internal playback engine
     # ------------------------------------------------------------------
 
-    async def _play_next(self, text_channel: discord.TextChannel, auto_next: bool = False) -> None:
+    async def _play_next(self, text_channel: discord.TextChannel = None, auto_next: bool = False) -> None:
         if not self.voice_client or not self.voice_client.is_connected():
             self._playing = False
             return
+
+        if text_channel:
+            self.text_channel_id = text_channel.id
+        elif self.text_channel_id:
+            text_channel = self.voice_client.client.get_channel(self.text_channel_id)
 
         curr = self.current
         next_song = None
@@ -316,7 +329,7 @@ class GuildPlayer:
             
         return self.library.get_random()
 
-    async def _stream(self, song: Song, text_channel: discord.TextChannel) -> None:
+    async def _stream(self, song: Song, text_channel: discord.TextChannel = None) -> None:
         if not self.voice_client:
             return
 

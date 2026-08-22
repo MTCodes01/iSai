@@ -13,9 +13,10 @@ log = logging.getLogger("iSai.IPC")
 
 class IPCServer:
 
-    def _get_text_channel(self, data: dict):
+    def _get_text_channel(self, player, data: dict):
         text_channel_id = data.get('text_channel_id')
         if text_channel_id:
+            player.text_channel_id = int(text_channel_id)
             channel = self.bot.get_channel(int(text_channel_id))
             if isinstance(channel, discord.TextChannel):
                 return channel
@@ -117,6 +118,7 @@ class IPCServer:
         
         if player.voice_client.is_playing() or player.voice_client.is_paused():
             position = player.enqueue(best_song)
+            self._get_text_channel(player, data)
             return web.json_response({
                 'status': 'enqueued', 
                 'song': best_song.title, 
@@ -126,7 +128,7 @@ class IPCServer:
             })
         else:
             player.enqueue(best_song)
-            await player.start(self._get_text_channel(data))
+            await player.start(self._get_text_channel(player, data))
             return web.json_response({
                 'status': 'playing', 
                 'song': best_song.title,
@@ -167,7 +169,7 @@ class IPCServer:
         if not player.current:
             return web.json_response({'error': 'Nothing is playing'}, status=400)
             
-        skipped = await player.skip(self._get_text_channel(data))
+        skipped = await player.skip(self._get_text_channel(player, data))
         return web.json_response({
             'status': 'skipped', 
             'song': skipped.title if skipped else None,
@@ -182,7 +184,7 @@ class IPCServer:
         if not player.history:
             return web.json_response({'error': 'No previous song in history'}, status=400)
             
-        prev_song = await player.prev(self._get_text_channel(data))
+        prev_song = await player.prev(self._get_text_channel(player, data))
         return web.json_response({
             'status': 'played_prev', 
             'song': prev_song.title if prev_song else None,
@@ -311,6 +313,7 @@ class IPCServer:
         
         if player.voice_client.is_playing() or player.voice_client.is_paused():
             position = player.enqueue(song)
+            self._get_text_channel(player, data)
             return web.json_response({
                 'status': 'enqueued', 
                 'song': song.title, 
@@ -320,7 +323,7 @@ class IPCServer:
             })
         else:
             player.enqueue(song)
-            await player.start(self._get_text_channel(data))
+            await player.start(self._get_text_channel(player, data))
             return web.json_response({
                 'status': 'playing', 
                 'song': song.title,
@@ -385,13 +388,14 @@ class IPCServer:
             return web.json_response({'error': 'No valid songs found in the playlist.'}, status=404)
             
         if player.current is None and not (player.voice_client.is_playing() or player.voice_client.is_paused()):
-            await player.start(self._get_text_channel(data))
+            await player.start(self._get_text_channel(player, data))
             return web.json_response({
                 'status': 'playing_playlist', 
                 'count': added_count,
                 'first_song': first_song.title
             })
         else:
+            self._get_text_channel(player, data)
             return web.json_response({
                 'status': 'enqueued_playlist', 
                 'count': added_count,
