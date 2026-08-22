@@ -408,7 +408,7 @@ class GuildPlayer:
             if self._loop:
                 is_manual = getattr(self, '_is_manual_stop', False)
                 self._is_manual_stop = False
-                coro = self._play_next(text_channel, auto_next=not is_manual)
+                coro = self._play_next(text_channel)
                 asyncio.run_coroutine_threadsafe(coro, self._loop)
 
         self.voice_client.play(source, after=after_callback)
