@@ -273,20 +273,19 @@ class MusicCog(commands.Cog):
                 description=f"**{data.get('song')}**",
                 fields=[
                     ("Artist", data.get('artist', 'Unknown'), True),
-                    ("Position in Queue", str(data.get('position', '?')), True),
                 ],
             )
+            embed.set_footer(text=f"Position in queue: {data.get('position', '?')}")
+            await interaction.followup.send(embed=embed)
         else:
             embed = make_embed(
-                title="▶️ Now Playing",
+                title="▶️ Starting Playback...",
                 description=f"**{data.get('song')}**",
                 fields=[
                     ("Artist", data.get('artist', 'Unknown'), True),
                 ],
             )
-            
-        embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+            await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="random", description="Play a random song from the library.")
     async def random(self, interaction: discord.Interaction) -> None:
@@ -448,7 +447,7 @@ class MusicCog(commands.Cog):
             description=f"**{data.get('song')}**",
             fields=fields,
         )
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="shuffle", description="Shuffle the current queue.")
     async def shuffle(self, interaction: discord.Interaction) -> None:
@@ -548,15 +547,13 @@ class MusicCog(commands.Cog):
             )
         else:
             embed = make_embed(
-                title="▶️ Now Playing (Internet)",
+                title="▶️ Starting Playback (Internet)...",
                 description=f"**{data.get('song')}**",
-                fields=[
-                    ("Artist", data.get('artist', 'Unknown'), True),
-                ],
+                fields=[("Artist", data.get('artist', 'Unknown'), True)]
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="getplaylist", description="Add all songs from a YouTube playlist to the queue.")
     @app_commands.describe(playlist_url="YouTube playlist link.")
@@ -591,15 +588,13 @@ class MusicCog(commands.Cog):
             )
         else:
             embed = make_embed(
-                title="▶️ Playing Playlist",
+                title="▶️ Starting Playlist...",
                 description=f"Added **{data.get('count')}** songs.",
-                fields=[
-                    ("Now Playing", data.get('first_song', 'Unknown'), True),
-                ],
+                fields=[("First Song", data.get('first_song', 'Unknown'), True)]
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+        await interaction.followup.send(embed=embed)
 
     # Local querying commands that do not need routing
     @app_commands.command(name="search", description="Search the library and show the top matches.")

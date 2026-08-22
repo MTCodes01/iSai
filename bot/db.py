@@ -24,6 +24,7 @@ def init_db():
                 loop_queue BOOLEAN,
                 autoplay BOOLEAN,
                 text_channel_id INTEGER,
+                last_message_id INTEGER,
                 current_song_json TEXT
             )
         ''')
@@ -54,7 +55,7 @@ def init_db():
 def get_player_state(guild_id: int) -> dict:
     with _get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT volume, loop_song, loop_queue, autoplay, text_channel_id, current_song_json FROM player_state WHERE guild_id = ?', (guild_id,))
+        cursor.execute('SELECT volume, loop_song, loop_queue, autoplay, text_channel_id, last_message_id, current_song_json FROM player_state WHERE guild_id = ?', (guild_id,))
         row = cursor.fetchone()
         
         if row:
@@ -64,7 +65,8 @@ def get_player_state(guild_id: int) -> dict:
                 'loop_queue': bool(row[2]),
                 'autoplay': bool(row[3]),
                 'text_channel_id': row[4],
-                'current_song': Song.from_dict(json.loads(row[5])) if row[5] else None
+                'last_message_id': row[5],
+                'current_song': Song.from_dict(json.loads(row[6])) if row[6] else None
             }
         else:
             state = {
@@ -73,19 +75,20 @@ def get_player_state(guild_id: int) -> dict:
                 'loop_queue': False,
                 'autoplay': False,
                 'text_channel_id': None,
+                'last_message_id': None,
                 'current_song': None
             }
             # Insert default state
             cursor.execute('''
-                INSERT INTO player_state (guild_id, volume, loop_song, loop_queue, autoplay, text_channel_id, current_song_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (guild_id, state['volume'], state['loop_song'], state['loop_queue'], state['autoplay'], state['text_channel_id'], None))
+                INSERT INTO player_state (guild_id, volume, loop_song, loop_queue, autoplay, text_channel_id, last_message_id, current_song_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (guild_id, state['volume'], state['loop_song'], state['loop_queue'], state['autoplay'], state['text_channel_id'], None, None))
             conn.commit()
             
         return state
 
 def update_player_state(guild_id: int, **kwargs):
-    valid_keys = {'volume', 'loop_song', 'loop_queue', 'autoplay', 'text_channel_id', 'current_song_json'}
+    valid_keys = {'volume', 'loop_song', 'loop_queue', 'autoplay', 'text_channel_id', 'last_message_id', 'current_song_json'}
     updates = []
     values = []
     

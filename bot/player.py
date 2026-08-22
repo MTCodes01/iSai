@@ -117,6 +117,14 @@ class GuildPlayer:
         db.update_player_state(self.guild_id, text_channel_id=value)
         
     @property
+    def last_message_id(self) -> Optional[int]:
+        return db.get_player_state(self.guild_id).get('last_message_id')
+        
+    @last_message_id.setter
+    def last_message_id(self, value: Optional[int]):
+        db.update_player_state(self.guild_id, last_message_id=value)
+        
+    @property
     def volume(self) -> float:
         return db.get_player_state(self.guild_id).get('volume', DEFAULT_VOLUME)
 
@@ -229,6 +237,8 @@ class GuildPlayer:
             if self.voice_client.is_playing() or self.voice_client.is_paused():
                 self._is_manual_stop = True
             self.voice_client.stop()
+            
+        await self._remove_buttons_from_last_message()
 
     def pause(self) -> bool:
         if self.voice_client and self.voice_client.is_playing():
@@ -246,7 +256,18 @@ class GuildPlayer:
     # Internal playback engine
     # ------------------------------------------------------------------
 
-    async def _play_next(self, text_channel: discord.TextChannel = None, auto_next: bool = False) -> None:
+    async def _remove_buttons_from_last_message(self, text_channel: discord.TextChannel = None):
+        if not text_channel and self.text_channel_id and self.voice_client:
+            text_channel = self.voice_client.client.get_channel(self.text_channel_id)
+        if text_channel and self.last_message_id:
+            try:
+                msg = await text_channel.fetch_message(self.last_message_id)
+                await msg.edit(view=None)
+            except Exception as e:
+                log.debug("Failed to remove buttons from last message: %s", e)
+            self.last_message_id = None
+
+    async def _play_next(self, text_channel: discord.TextChannel = None) -> None:
         if not self.voice_client or not self.voice_client.is_connected():
             self._playing = False
             return
@@ -276,12 +297,14 @@ class GuildPlayer:
             self._playing = False
             self.current = None
             log.info("[Guild %d] Queue finished.", self.guild_id)
+            if self._loop:
+                asyncio.run_coroutine_threadsafe(self._remove_buttons_from_last_message(text_channel), self._loop)
             return
 
         self.current = next_song
         self._playing = True
         
-        if auto_next and text_channel:
+        if text_channel:
             try:
                 from bot.commands import PlayerControls
                 from bot.utils import make_embed, format_duration
@@ -299,10 +322,21 @@ class GuildPlayer:
                     fields=fields,
                 )
                 
-                asyncio.run_coroutine_threadsafe(
-                    text_channel.send(embed=embed, view=PlayerControls(self.guild_id, self.voice_client.channel.id if self.voice_client else None)),
-                    self._loop
-                )
+                async def send_or_edit():
+                    view = PlayerControls(self.guild_id, self.voice_client.channel.id if self.voice_client else None)
+                    msg = None
+                    if self.last_message_id:
+                        try:
+                            msg = await text_channel.fetch_message(self.last_message_id)
+                            await msg.edit(embed=embed, view=view)
+                        except Exception:
+                            msg = None
+                            
+                    if not msg:
+                        msg = await text_channel.send(embed=embed, view=view)
+                        self.last_message_id = msg.id
+
+                asyncio.run_coroutine_threadsafe(send_or_edit(), self._loop)
             except Exception as e:
                 log.error("Failed to send Now Playing message: %s", e)
 
