@@ -30,9 +30,9 @@ from bot.utils import (
 log = logging.getLogger("iSai.commands")
 
 
-def _get_voice_channel(interaction: discord.Interaction) -> Optional[discord.VoiceChannel]:
+def _get_voice_channel(ctx: commands.Context) -> Optional[discord.VoiceChannel]:
     """Return the voice channel the interaction author is currently in."""
-    member = interaction.user
+    member = ctx.author
     if isinstance(member, discord.Member) and member.voice and member.voice.channel:
         channel = member.voice.channel
         if isinstance(channel, discord.VoiceChannel):
@@ -243,26 +243,26 @@ class MusicCog(commands.Cog):
         self.library = library
         self.manager = manager
 
-    @app_commands.command(name="play", description="Search and play a song from the local library.")
+    @commands.hybrid_command(name="play", description="Search and play a song from the local library.")
     @app_commands.describe(song="Song name, artist, or any search term.")
-    async def play(self, interaction: discord.Interaction, song: str) -> None:
-        await interaction.response.defer()
+    async def play(self, ctx: commands.Context, song: str) -> None:
+        await ctx.defer()
 
-        vc = _get_voice_channel(interaction)
+        vc = _get_voice_channel(ctx)
         if vc is None:
-            await interaction.followup.send(embed=error_embed("You must be in a voice channel to use this command."))
+            await ctx.send(embed=error_embed("You must be in a voice channel to use this command."))
             return
 
         payload = {
-            "guild_id": interaction.guild_id,
-            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
+            "guild_id": (ctx.guild.id if ctx.guild else None),
+            "vc_id": vc.id, "text_channel_id": ctx.channel.id,
             "song": song
         }
         
         data, status = await _send_to_manager("play", payload)
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
+            await ctx.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
             return
             
         bot_assigned = data.get('assigned_bot', 'Unknown Bot')
@@ -276,7 +276,7 @@ class MusicCog(commands.Cog):
                 ],
             )
             embed.set_footer(text=f"Position in queue: {data.get('position', '?')}")
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
         else:
             embed = make_embed(
                 title="▶️ Starting Playback...",
@@ -285,28 +285,28 @@ class MusicCog(commands.Cog):
                     ("Artist", data.get('artist', 'Unknown'), True),
                 ],
             )
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
 
-    @app_commands.command(name="random", description="Play a random song from the library.")
-    async def random(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
+    @commands.hybrid_command(name="random", description="Play a random song from the library.")
+    async def random(self, ctx: commands.Context) -> None:
+        await ctx.defer()
 
-        vc = _get_voice_channel(interaction)
+        vc = _get_voice_channel(ctx)
         if vc is None:
-            await interaction.followup.send(embed=error_embed("You must be in a voice channel to use this command."))
+            await ctx.send(embed=error_embed("You must be in a voice channel to use this command."))
             return
 
         # Passing "random" as query, since the IPC falls back to random if not found
         payload = {
-            "guild_id": interaction.guild_id,
-            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
+            "guild_id": (ctx.guild.id if ctx.guild else None),
+            "vc_id": vc.id, "text_channel_id": ctx.channel.id,
             "song": "random_fallback_query_12345" 
         }
         
         data, status = await _send_to_manager("play", payload)
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
+            await ctx.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
             return
             
         bot_assigned = data.get('assigned_bot', 'Unknown Bot')
@@ -319,110 +319,110 @@ class MusicCog(commands.Cog):
             ],
         )
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+        await ctx.send(embed=embed, view=PlayerControls((ctx.guild.id if ctx.guild else None), vc.id if vc else None))
 
 
-    @app_commands.command(name="prev", description="Play the previous song.")
-    async def prev(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("prev", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="prev", description="Play the previous song.")
+    async def prev(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("prev", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'No previous song.')))
+            await ctx.send(embed=error_embed(data.get('error', 'No previous song.')))
             return
             
         embed = success_embed(
             title="⏮️ Playing Previous",
             description=f"**{data.get('song')}** — *{data.get('artist')}*" if data.get('song') else "Playing previous track.",
         )
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+        await ctx.send(embed=embed, view=PlayerControls((ctx.guild.id if ctx.guild else None), vc.id if vc else None))
 
-    @app_commands.command(name="skip", description="Skip the current song.")
-    async def skip(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("skip", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="skip", description="Skip the current song.")
+    async def skip(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("skip", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Nothing is playing.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Nothing is playing.')))
             return
             
         embed = success_embed(
             title="⏭️ Skipped",
             description=f"**{data.get('song')}** — *{data.get('artist')}*" if data.get('song') else "Track skipped.",
         )
-        await interaction.followup.send(embed=embed, view=PlayerControls(interaction.guild_id, vc.id if vc else None))
+        await ctx.send(embed=embed, view=PlayerControls((ctx.guild.id if ctx.guild else None), vc.id if vc else None))
 
-    @app_commands.command(name="pause", description="Pause playback.")
-    async def pause(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("pause", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="pause", description="Pause playback.")
+    async def pause(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("pause", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to pause.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to pause.')))
             return
             
-        await interaction.followup.send(embed=success_embed("⏸️ Paused", "Use `/resume` to continue."))
+        await ctx.send(embed=success_embed("⏸️ Paused", "Use `/resume` to continue."))
 
-    @app_commands.command(name="resume", description="Resume paused playback.")
-    async def resume(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("resume", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="resume", description="Resume paused playback.")
+    async def resume(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("resume", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to resume.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to resume.')))
             return
             
-        await interaction.followup.send(embed=success_embed("▶️ Resumed"))
+        await ctx.send(embed=success_embed("▶️ Resumed"))
 
-    @app_commands.command(name="stop", description="Stop playback and clear the queue.")
-    async def stop(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("stop", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="stop", description="Stop playback and clear the queue.")
+    async def stop(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("stop", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to stop.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to stop.')))
             return
             
-        await interaction.followup.send(embed=success_embed("⏹️ Stopped", "Queue cleared."))
+        await ctx.send(embed=success_embed("⏹️ Stopped", "Queue cleared."))
 
-    @app_commands.command(name="disconnect", description="Disconnect the bot from the voice channel.")
-    async def disconnect(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("disconnect", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="disconnect", description="Disconnect the bot from the voice channel.")
+    async def disconnect(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("disconnect", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to disconnect.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to disconnect.')))
             return
             
-        await interaction.followup.send(embed=success_embed("👋 Disconnected", "Goodbye!"))
+        await ctx.send(embed=success_embed("👋 Disconnected", "Goodbye!"))
 
-    @app_commands.command(name="queue", description="Show the current queue.")
-    async def queue(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("queue", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="queue", description="Show the current queue.")
+    async def queue(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("queue", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'The queue is empty.')))
+            await ctx.send(embed=error_embed(data.get('error', 'The queue is empty.')))
             return
             
-        view = QueuePagination(data, interaction.guild_id, vc.id if vc else None)
-        await interaction.followup.send(embed=view.format_page(), view=view)
+        view = QueuePagination(data, (ctx.guild.id if ctx.guild else None), vc.id if vc else None)
+        await ctx.send(embed=view.format_page(), view=view)
 
-    @app_commands.command(name="nowplaying", description="Show information about the current song.")
-    async def nowplaying(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("nowplaying", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="nowplaying", description="Show information about the current song.")
+    async def nowplaying(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("nowplaying", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=make_embed(title="🎵 Now Playing", description="Nothing is playing right now. Use `/play` to start!"))
+            await ctx.send(embed=make_embed(title="🎵 Now Playing", description="Nothing is playing right now. Use `/play` to start!"))
             return
             
         fields = [
@@ -447,91 +447,91 @@ class MusicCog(commands.Cog):
             description=f"**{data.get('song')}**",
             fields=fields,
         )
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)
 
-    @app_commands.command(name="shuffle", description="Shuffle the current queue.")
-    async def shuffle(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("shuffle", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="shuffle", description="Shuffle the current queue.")
+    async def shuffle(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("shuffle", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'The queue is empty.')))
+            await ctx.send(embed=error_embed(data.get('error', 'The queue is empty.')))
             return
             
-        await interaction.followup.send(embed=success_embed("🔀 Queue Shuffled", f"{data.get('count')} songs reordered."))
+        await ctx.send(embed=success_embed("🔀 Queue Shuffled", f"{data.get('count')} songs reordered."))
 
-    @app_commands.command(name="loop", description="Toggle looping of the current song.")
-    async def loop(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("loop", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="loop", description="Toggle looping of the current song.")
+    async def loop(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("loop", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
             return
             
         state = "enabled 🔂" if data.get('enabled') else "disabled"
-        await interaction.followup.send(embed=success_embed(f"🔂 Song Loop {state.title()}", f"The current song will {'repeat indefinitely' if data.get('enabled') else 'not repeat'}."))
+        await ctx.send(embed=success_embed(f"🔂 Song Loop {state.title()}", f"The current song will {'repeat indefinitely' if data.get('enabled') else 'not repeat'}."))
 
-    @app_commands.command(name="loopqueue", description="Toggle looping of the entire queue.")
-    async def loopqueue(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("loopqueue", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="loopqueue", description="Toggle looping of the entire queue.")
+    async def loopqueue(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("loopqueue", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to toggle loop.')))
             return
             
         state = "enabled 🔁" if data.get('enabled') else "disabled"
-        await interaction.followup.send(embed=success_embed(f"🔁 Queue Loop {state.title()}", f"Songs will {'be re-added to the queue after playing' if data.get('enabled') else 'not repeat'}."))
+        await ctx.send(embed=success_embed(f"🔁 Queue Loop {state.title()}", f"Songs will {'be re-added to the queue after playing' if data.get('enabled') else 'not repeat'}."))
 
-    @app_commands.command(name="autoplay", description="Toggle autoplay to automatically play similar songs when the queue ends.")
-    async def autoplay(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("autoplay", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None})
+    @commands.hybrid_command(name="autoplay", description="Toggle autoplay to automatically play similar songs when the queue ends.")
+    async def autoplay(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("autoplay", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Failed to toggle autoplay.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Failed to toggle autoplay.')))
             return
             
         state = "enabled 📻" if data.get('enabled') else "disabled"
-        await interaction.followup.send(embed=success_embed(f"📻 Autoplay {state.title()}", f"The bot will {'now play similar songs when the queue ends' if data.get('enabled') else 'stop playing when the queue ends'}."))
+        await ctx.send(embed=success_embed(f"📻 Autoplay {state.title()}", f"The bot will {'now play similar songs when the queue ends' if data.get('enabled') else 'stop playing when the queue ends'}."))
 
-    @app_commands.command(name="volume", description="Set the playback volume.")
+    @commands.hybrid_command(name="volume", description="Set the playback volume.")
     @app_commands.describe(level="Volume level from 1 to 100")
-    async def volume(self, interaction: discord.Interaction, level: int) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
-        data, status = await _send_to_manager("volume", {"guild_id": interaction.guild_id, "vc_id": vc.id, "text_channel_id": interaction.channel_id if vc else None, "level": level})
+    async def volume(self, ctx: commands.Context, level: int) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
+        data, status = await _send_to_manager("volume", {"guild_id": (ctx.guild.id if ctx.guild else None), "vc_id": vc.id, "text_channel_id": ctx.channel.id if vc else None, "level": level})
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Volume must be between 1 and 100.')))
+            await ctx.send(embed=error_embed(data.get('error', 'Volume must be between 1 and 100.')))
             return
             
-        await interaction.followup.send(embed=success_embed("🔊 Volume Changed", f"Volume set to **{level}%**."))
+        await ctx.send(embed=success_embed("🔊 Volume Changed", f"Volume set to **{level}%**."))
 
-    @app_commands.command(name="get", description="Search for and play any song from the internet.")
+    @commands.hybrid_command(name="get", description="Search for and play any song from the internet.")
     @app_commands.describe(song_name="Song name to search for (e.g. on YouTube).")
-    async def get_song(self, interaction: discord.Interaction, song_name: str) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
+    async def get_song(self, ctx: commands.Context, song_name: str) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
         if vc is None:
-            await interaction.followup.send(embed=error_embed("You must be in a voice channel to use this command."))
+            await ctx.send(embed=error_embed("You must be in a voice channel to use this command."))
             return
 
         payload = {
-            "guild_id": interaction.guild_id,
-            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
+            "guild_id": (ctx.guild.id if ctx.guild else None),
+            "vc_id": vc.id, "text_channel_id": ctx.channel.id,
             "song": song_name
         }
         
         data, status = await _send_to_manager("get", payload)
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
+            await ctx.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
             return
             
         bot_assigned = data.get('assigned_bot', 'Unknown Bot')
@@ -553,27 +553,27 @@ class MusicCog(commands.Cog):
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)
 
-    @app_commands.command(name="getplaylist", description="Add all songs from a YouTube playlist to the queue.")
+    @commands.hybrid_command(name="getplaylist", description="Add all songs from a YouTube playlist to the queue.")
     @app_commands.describe(playlist_url="YouTube playlist link.")
-    async def getplaylist(self, interaction: discord.Interaction, playlist_url: str) -> None:
-        await interaction.response.defer()
-        vc = _get_voice_channel(interaction)
+    async def getplaylist(self, ctx: commands.Context, playlist_url: str) -> None:
+        await ctx.defer()
+        vc = _get_voice_channel(ctx)
         if vc is None:
-            await interaction.followup.send(embed=error_embed("You must be in a voice channel to use this command."))
+            await ctx.send(embed=error_embed("You must be in a voice channel to use this command."))
             return
 
         payload = {
-            "guild_id": interaction.guild_id,
-            "vc_id": vc.id, "text_channel_id": interaction.channel_id,
+            "guild_id": (ctx.guild.id if ctx.guild else None),
+            "vc_id": vc.id, "text_channel_id": ctx.channel.id,
             "playlist_url": playlist_url
         }
         
         data, status = await _send_to_manager("getplaylist", payload)
         
         if status != 200:
-            await interaction.followup.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
+            await ctx.send(embed=error_embed(data.get('error', 'Unknown error occurred')))
             return
             
         bot_assigned = data.get('assigned_bot', 'Unknown Bot')
@@ -594,17 +594,17 @@ class MusicCog(commands.Cog):
             )
             
         embed.set_footer(text=f"Handled by {bot_assigned}")
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)
 
     # Local querying commands that do not need routing
-    @app_commands.command(name="search", description="Search the library and show the top matches.")
+    @commands.hybrid_command(name="search", description="Search the library and show the top matches.")
     @app_commands.describe(query="Search term (song title, artist, or both).")
-    async def search(self, interaction: discord.Interaction, query: str) -> None:
-        await interaction.response.defer()
+    async def search(self, ctx: commands.Context, query: str) -> None:
+        await ctx.defer()
 
         results = self.library.search(query, limit=TOP_SEARCH_RESULTS)
         if not results:
-            await interaction.followup.send(embed=error_embed(f"No results found for **{query}**."))
+            await ctx.send(embed=error_embed(f"No results found for **{query}**."))
             return
 
         lines = [
@@ -616,21 +616,21 @@ class MusicCog(commands.Cog):
             description="\n".join(lines),
         )
         embed.set_footer(text=f"🎵 iSai Music Bot  •  {len(results)} results found")
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)
 
-    @app_commands.command(name="playlist", description="View all available songs in the library.")
-    async def playlist(self, interaction: discord.Interaction) -> None:
+    @commands.hybrid_command(name="playlist", description="View all available songs in the library.")
+    async def playlist(self, ctx: commands.Context) -> None:
         songs = self.library._songs
         if not songs:
-            await interaction.response.send_message(embed=error_embed("No songs available in the library."))
+            await ctx.send(embed=error_embed("No songs available in the library."))
             return
             
         view = PlaylistPagination(songs)
-        await interaction.response.send_message(embed=view.format_page(), view=view)  # NOREPLACE
+        await ctx.send(embed=view.format_page(), view=view)  # NOREPLACE
 
-    @app_commands.command(name="help", description="Show all available iSai commands.")
-    async def help(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
+    @commands.hybrid_command(name="help", description="Show all available iSai commands.")
+    async def help(self, ctx: commands.Context) -> None:
+        await ctx.defer()
 
         commands_info = [
             ("▶️ /play `<song>`", "Search and play a song (fuzzy search)"),
@@ -665,4 +665,4 @@ class MusicCog(commands.Cog):
             value=f"**{self.library.count}** songs indexed",
             inline=False,
         )
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)

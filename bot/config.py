@@ -23,6 +23,9 @@ load_dotenv()
 TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 """Your Discord bot token. Set via DISCORD_TOKEN in your .env file."""
 
+COMMAND_PREFIX: str = os.getenv("COMMAND_PREFIX", "?")
+"""The default prefix used for normal text commands."""
+
 BOT_INSTANCE_ID: str = os.getenv("BOT_INSTANCE_ID", "")
 """Identifier for this bot instance, e.g., 'BOT-1'."""
 

@@ -24,7 +24,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from bot.config import TOKEN
+from bot.config import TOKEN, COMMAND_PREFIX
 from bot.music_library import MusicLibrary
 from bot.player import PlayerManager
 from bot.commands import MusicCog
@@ -46,7 +46,7 @@ log = setup_logging()
 intents = discord.Intents.default()
 intents.voice_states = True     # Needed to detect which VC the user is in
 intents.guilds = True           # Needed for guild/channel access
-intents.message_content = False # We use slash commands; no message reading needed
+intents.message_content = True  # Enabled to allow prefix commands
 
 
 class IsSaiBot(commands.Bot):
@@ -57,7 +57,7 @@ class IsSaiBot(commands.Bot):
 
     def __init__(self) -> None:
         super().__init__(
-            command_prefix="!",   # Prefix commands are unused but required by the API
+            command_prefix=COMMAND_PREFIX,   # Prefix used for text commands
             intents=intents,
             help_command=None,    # We have a custom /help slash command
         )
