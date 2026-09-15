@@ -149,7 +149,11 @@ class ManagerRouter:
             async with aiohttp.ClientSession() as session:
                 url = f"http://127.0.0.1:{target_bot.ipc_port}/{command}"
                 async with session.post(url, json=data, timeout=10) as resp:
-                    resp_data = await resp.json()
+                    try:
+                        resp_data = await resp.json()
+                    except aiohttp.client_exceptions.ContentTypeError:
+                        text = await resp.text()
+                        return web.json_response({'error': f"IPC returned {resp.status}: {text}"}, status=500)
                     resp_data['assigned_bot'] = target_bot.bot_id
                     return web.json_response(resp_data, status=resp.status)
         except Exception as e:

@@ -276,131 +276,143 @@ class IPCServer:
         return web.json_response({'status': 'volume_set', 'level': level})
 
     async def handle_get(self, request: web.Request):
-        data = await request.json()
-        guild_id = data.get('guild_id')
-        vc_id = data.get('vc_id')
-        song_query = data.get('song')
-        
-        if not guild_id or not song_query or not vc_id:
-            return web.json_response({'error': 'Missing guild_id, vc_id, or song'}, status=400)
+        try:
+            data = await request.json()
+            guild_id = data.get('guild_id')
+            vc_id = data.get('vc_id')
+            song_query = data.get('song')
             
-        player = self.bot.player_manager.get(int(guild_id))
-        
-        if not player.voice_client or not player.voice_client.is_connected():
-            channel = self.bot.get_channel(int(vc_id))
-            if isinstance(channel, discord.VoiceChannel):
-                await player.connect(channel)
-            else:
-                return web.json_response({'error': 'Invalid Voice Channel ID'}, status=400)
-            
-        from bot.yt_stream import search_song
-        from bot.music_library import Song
-        
-        info = await search_song(song_query)
-        if not info or "url" not in info:
-            return web.json_response({'error': 'Could not find any internet streams.'}, status=404)
-            
-        song = Song(
-            path=info["url"],
-            title=info.get("title", song_query),
-            artist=info.get("uploader", "Unknown Artist"),
-            album="Internet Stream",
-            duration=info.get("duration"),
-            search_key="",
-            is_stream=True,
-            stream_headers=info.get("http_headers")
-        )
-        
-        if player.voice_client.is_playing() or player.voice_client.is_paused():
-            position = player.enqueue(song)
-            self._get_text_channel(player, data)
-            return web.json_response({
-                'status': 'enqueued', 
-                'song': song.title, 
-                'artist': song.artist, 
-                'duration': song.duration,
-                'position': position
-            })
-        else:
-            player.enqueue(song)
-            await player.start(self._get_text_channel(player, data))
-            return web.json_response({
-                'status': 'playing', 
-                'song': song.title,
-                'artist': song.artist, 
-                'duration': song.duration
-            })
-
-    async def handle_getplaylist(self, request: web.Request):
-        data = await request.json()
-        guild_id = data.get('guild_id')
-        vc_id = data.get('vc_id')
-        playlist_url = data.get('playlist_url')
-        
-        if not guild_id or not playlist_url or not vc_id:
-            return web.json_response({'error': 'Missing guild_id, vc_id, or playlist_url'}, status=400)
-            
-        player = self.bot.player_manager.get(int(guild_id))
-        
-        if not player.voice_client or not player.voice_client.is_connected():
-            channel = self.bot.get_channel(int(vc_id))
-            if isinstance(channel, discord.VoiceChannel):
-                await player.connect(channel)
-            else:
-                return web.json_response({'error': 'Invalid Voice Channel ID'}, status=400)
-            
-        from bot.yt_stream import search_playlist
-        from bot.music_library import Song
-        
-        entries = await search_playlist(playlist_url)
-        if not entries:
-            return web.json_response({'error': 'Could not fetch playlist or playlist is empty.'}, status=404)
-            
-        added_count = 0
-        first_song = None
-        for info in entries:
-            video_url = info.get("url")
-            if not video_url and info.get("id"):
-                video_url = f"https://www.youtube.com/watch?v={info['id']}"
-            elif video_url and not video_url.startswith("http"):
-                video_url = f"https://www.youtube.com/watch?v={info.get('id', video_url)}"
+            if not guild_id or not song_query or not vc_id:
+                return web.json_response({'error': 'Missing guild_id, vc_id, or song'}, status=400)
                 
-            if not video_url:
-                continue
+            player = self.bot.player_manager.get(int(guild_id))
+            
+            if not player.voice_client or not player.voice_client.is_connected():
+                channel = self.bot.get_channel(int(vc_id))
+                if isinstance(channel, discord.VoiceChannel):
+                    await player.connect(channel)
+                else:
+                    return web.json_response({'error': 'Invalid Voice Channel ID'}, status=400)
+                
+            from bot.yt_stream import search_song
+            from bot.music_library import Song
+            
+            info = await search_song(song_query)
+            if not info or "url" not in info:
+                return web.json_response({'error': 'Could not find any internet streams.'}, status=404)
                 
             song = Song(
-                path=video_url,
-                title=info.get("title", "Unknown Title"),
+                path=info["url"],
+                title=info.get("title", song_query),
                 artist=info.get("uploader", "Unknown Artist"),
-                album="Internet Playlist",
+                album="Internet Stream",
                 duration=info.get("duration"),
                 search_key="",
                 is_stream=True,
-                stream_headers=None,
-                is_unresolved=True
+                stream_headers=info.get("http_headers")
             )
-            added_count += 1
-            if not first_song:
-                first_song = song
-            player.enqueue(song)
             
-        if added_count == 0:
-            return web.json_response({'error': 'No valid songs found in the playlist.'}, status=404)
+            if player.voice_client.is_playing() or player.voice_client.is_paused():
+                position = player.enqueue(song)
+                self._get_text_channel(player, data)
+                return web.json_response({
+                    'status': 'enqueued', 
+                    'song': song.title, 
+                    'artist': song.artist, 
+                    'duration': song.duration,
+                    'position': position
+                })
+            else:
+                player.enqueue(song)
+                await player.start(self._get_text_channel(player, data))
+                return web.json_response({
+                    'status': 'playing', 
+                    'song': song.title,
+                    'artist': song.artist, 
+                    'duration': song.duration
+                })
+        except Exception as e:
+            import traceback
+            err_msg = traceback.format_exc()
+            log.error(f"Error in handle_get: {err_msg}")
+            return web.json_response({'error': f"Internal server error: {str(e)}", 'traceback': err_msg}, status=500)
+
+    async def handle_getplaylist(self, request: web.Request):
+        try:
+            data = await request.json()
+            guild_id = data.get('guild_id')
+            vc_id = data.get('vc_id')
+            playlist_url = data.get('playlist_url')
             
-        if player.current is None and not (player.voice_client.is_playing() or player.voice_client.is_paused()):
-            await player.start(self._get_text_channel(player, data))
-            return web.json_response({
-                'status': 'playing_playlist', 
-                'count': added_count,
-                'first_song': first_song.title
-            })
-        else:
-            self._get_text_channel(player, data)
-            return web.json_response({
-                'status': 'enqueued_playlist', 
-                'count': added_count,
-                'first_song': first_song.title
-            })
+            if not guild_id or not playlist_url or not vc_id:
+                return web.json_response({'error': 'Missing guild_id, vc_id, or playlist_url'}, status=400)
+                
+            player = self.bot.player_manager.get(int(guild_id))
+            
+            if not player.voice_client or not player.voice_client.is_connected():
+                channel = self.bot.get_channel(int(vc_id))
+                if isinstance(channel, discord.VoiceChannel):
+                    await player.connect(channel)
+                else:
+                    return web.json_response({'error': 'Invalid Voice Channel ID'}, status=400)
+                
+            from bot.yt_stream import search_playlist
+            from bot.music_library import Song
+            
+            entries = await search_playlist(playlist_url)
+            if not entries:
+                return web.json_response({'error': 'Could not fetch playlist or playlist is empty.'}, status=404)
+                
+            added_count = 0
+            first_song = None
+            for info in entries:
+                video_url = info.get("url")
+                if not video_url and info.get("id"):
+                    video_url = f"https://www.youtube.com/watch?v={info['id']}"
+                elif video_url and not video_url.startswith("http"):
+                    video_url = f"https://www.youtube.com/watch?v={info.get('id', video_url)}"
+                    
+                if not video_url:
+                    continue
+                    
+                song = Song(
+                    path=video_url,
+                    title=info.get("title", "Unknown Title"),
+                    artist=info.get("uploader", "Unknown Artist"),
+                    album="Internet Playlist",
+                    duration=info.get("duration"),
+                    search_key="",
+                    is_stream=True,
+                    stream_headers=None,
+                    is_unresolved=True
+                )
+                added_count += 1
+                if not first_song:
+                    first_song = song
+                player.enqueue(song)
+                
+            if added_count == 0:
+                return web.json_response({'error': 'No valid songs found in the playlist.'}, status=404)
+                
+            if player.current is None and not (player.voice_client.is_playing() or player.voice_client.is_paused()):
+                await player.start(self._get_text_channel(player, data))
+                return web.json_response({
+                    'status': 'playing_playlist', 
+                    'count': added_count,
+                    'first_song': first_song.title
+                })
+            else:
+                self._get_text_channel(player, data)
+                return web.json_response({
+                    'status': 'enqueued_playlist', 
+                    'count': added_count,
+                    'first_song': first_song.title
+                })
+        except Exception as e:
+            import traceback
+            err_msg = traceback.format_exc()
+            log.error(f"Error in handle_getplaylist: {err_msg}")
+            return web.json_response({'error': f"Internal server error: {str(e)}", 'traceback': err_msg}, status=500)
 
 
     async def handle_status(self, request: web.Request):
