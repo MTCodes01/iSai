@@ -1,4 +1,4 @@
-# iSai 🎵 — Local Music Discord Bot
+# iSai — Local Music Discord Bot
 
 A lightweight, clean Discord music bot that plays audio files from your **local music library** — no YouTube, no Spotify, no APIs.
 
@@ -6,24 +6,24 @@ Built with **discord.py 2.x** (slash commands), **FFmpeg**, **mutagen** (metadat
 
 ---
 
-## ✨ Features
+## Features
 
 | Feature | Details |
 |---|---|
-| 🎵 Local playback | Plays mp3, flac, wav, m4a, ogg |
-| 🔍 Fuzzy search | Find songs by partial name or artist |
-| 📋 Queue system | Add, shuffle, skip, loop |
-| 🔂 Song loop | Repeat the current track |
-| 🔁 Queue loop | Repeat the entire queue |
-| 🎲 Random song | Pick a random track |
-| 📊 Rich embeds | All responses use Discord embeds |
-| 💾 Library cache | Fast startup after first scan |
-| 🔄 Hot rescan | Add new files and refresh without restart |
-| 👋 Auto-disconnect | Leaves VC when all humans leave |
+| Local playback | Plays mp3, flac, wav, m4a, ogg |
+| Fuzzy search | Find songs by partial name or artist |
+| Queue system | Add, shuffle, skip, loop |
+| Song loop | Repeat the current track |
+| Queue loop | Repeat the entire queue |
+| Random song | Pick a random track |
+| Rich embeds | All responses use Discord embeds |
+| Library cache | Fast startup after first scan |
+| Hot rescan | Add new files and refresh without restart |
+| Auto-disconnect | Leaves VC when all humans leave |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 MusicBot/
@@ -48,7 +48,7 @@ MusicBot/
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 
@@ -106,7 +106,7 @@ music/
 python -m bot.bot
 ```
 
-### 🐳 Deploying with Docker (Alternative)
+### Deploying with Docker (Alternative)
 
 If you prefer using Docker, you can run the bot easily using Docker Compose:
 
@@ -126,7 +126,7 @@ If you prefer using Docker, you can run the bot easily using Docker Compose:
 
 ---
 
-## 🎮 Slash Commands
+## Slash Commands
 
 | Command | Description |
 |---|---|
@@ -148,7 +148,7 @@ If you prefer using Docker, you can run the bot easily using Docker Compose:
 
 ---
 
-## ⚙️ Configuration Reference (`.env`)
+## Configuration Reference (`.env`)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -160,7 +160,7 @@ If you prefer using Docker, you can run the bot easily using Docker Compose:
 
 ---
 
-## 🔍 How Search Works
+## How Search Works
 
 iSai uses **rapidfuzz** with `token_set_ratio` scoring, which means:
 
@@ -173,7 +173,7 @@ Results are scored 0-100 and filtered by `FUZZY_SCORE_THRESHOLD`.
 
 ---
 
-## 📦 Dependencies
+## Dependencies
 
 | Package | Purpose |
 |---|---|
@@ -185,7 +185,7 @@ Results are scored 0-100 and filtered by `FUZZY_SCORE_THRESHOLD`.
 
 ---
 
-## 🛠 Extending iSai
+## Extending iSai
 
 The codebase is intentionally modular:
 
@@ -196,6 +196,6 @@ The codebase is intentionally modular:
 
 ---
 
-## 📝 License
+## License
 
 MIT — use freely, modify liberally.
