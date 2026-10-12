@@ -1,0 +1,12 @@
+# These owners will be the default reviewers for pull requests in the
+# specified directories or file types.
+
+# Global owners (will be asked to review everything)
+*       @maintainer-username
+
+# Documentation owners
+/docs/  @mentor-docs
+*.md    @mentor-docs
+
+# CI/CD and GitHub Actions workflows
+/.github/workflows/ @maintainer-devops

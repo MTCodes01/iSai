@@ -1,0 +1,30 @@
+- name: commitoverflow
+  color: 5AA468
+  description: Commit Overflow
+- name: documentation
+  color: 0075ca
+  description: Improvements or additions to documentation (10 pts, 72h)
+- name: easy
+  color: 0e8a16
+  description: Easy difficulty
+- name: good first issue
+  color: 7057ff
+  description: Good for newcomers
+- name: hard
+  color: ff0000
+  description: Hard difficulty
+- name: medium
+  color: ff7300
+  description: Medium difficulty
+- name: duplicate
+  color: cfd3d7
+  description: This issue or pull request already exists
+- name: invalid
+  color: bbff00
+  description: This doesn't seem right
+- name: rework
+  color: ff6e6b
+  description: Requires rework
+- name: bug
+  color: 85000d
+  description: Something isn't working

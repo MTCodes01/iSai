@@ -1,0 +1,39 @@
+name: Issue Validation
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  validate-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Title Length
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const title = context.payload.issue.title;
+            if (title.length < 10) {
+              core.setFailed("Issue title must be at least 10 characters long.");
+            }
+
+      - name: Check Description Length
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            if (body.length < 30) {
+              core.setFailed("Issue description must be at least 30 characters long. Please provide more detail.");
+            }
+
+      - name: Ensure Issue Form Used
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            const isYamlForm = body.includes('### Title') || body.includes('### Description');
+            if (!isYamlForm) {
+              if(body.length < 50) {
+                 core.setFailed("Please use one of the standard Issue Forms provided when creating an issue.");
+              }
+            }

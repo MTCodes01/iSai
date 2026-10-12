@@ -1,0 +1,60 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if PR is Draft
+        if: github.event.pull_request.draft == true
+        run: |
+          echo "Pull request is a draft. Please mark it as ready for review when done."
+          exit 1
+
+      - name: Check PR Body Exists
+        if: github.event.pull_request.body == null || github.event.pull_request.body == ''
+        run: |
+          echo "Pull request body cannot be empty. Please fill out the PR template."
+          exit 1
+
+      - name: Check Linked Issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.pull_request.body;
+            const issueRegex = /Closes #\d+/i;
+            if (!issueRegex.test(body)) {
+              core.setFailed("PR must reference an issue using 'Closes #Issue'.");
+            }
+
+      - name: Check Merge Conflicts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (pr.mergeable_state === 'dirty') {
+              core.setFailed("Pull request has merge conflicts. Please resolve them.");
+            }
+
+      - name: Check Template Sections
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.pull_request.body;
+            const requiredSections = [
+              'Related Issue',
+              'Description',
+              'Type of Change',
+              'Testing Done',
+              'Checklist'
+            ];
+            for (const section of requiredSections) {
+              if (!body.includes(section)) {
+                core.setFailed(`PR body is missing required template section: ${section}`);
+              }
+            }

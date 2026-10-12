@@ -1,0 +1,45 @@
+name: Welcome First-Time Contributor
+
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Welcome Message
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const creator = context.payload.pull_request.user.login;
+            const repo = context.repo.repo;
+            const owner = context.repo.owner;
+            const issue_number = context.payload.pull_request.number;
+            
+            const { data: prs } = await github.rest.pulls.list({
+              owner: owner,
+              repo: repo,
+              state: 'all',
+              creator: creator
+            });
+            
+            if (prs.length === 1) {
+              const body = `🎉 Welcome to **Commit Overflow**! We are thrilled to have you here.
+              
+              Thank you for taking the time to submit your first Pull Request! Before we review your code, please ensure you have read through the following:
+              
+              - 🛠️ [CONTRIBUTING.md](CONTRIBUTING.md)
+              
+              A mentor or maintainer will review your pull request shortly. If you have any questions, feel free to ask here. Happy coding!`;
+              
+              await github.rest.issues.createComment({
+                owner: owner,
+                repo: repo,
+                issue_number: issue_number,
+                body: body
+              });
+            }

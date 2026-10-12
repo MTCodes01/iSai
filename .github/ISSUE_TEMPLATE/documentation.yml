@@ -1,0 +1,44 @@
+name: Documentation Update
+description: Propose a documentation update you'd like to write
+title: "[Docs]: "
+labels: ["documentation", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Documentation Update Proposal
+  - type: textarea
+    id: description
+    attributes:
+      label: Current Issue
+      description: What is missing, unclear, or incorrect in the current documentation? Provide links.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_update
+    attributes:
+      label: Proposed Update
+      description: What exactly will you add or change in the documentation?
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### Extra Details
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Add any other context here.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I confirm that I want to write this documentation update.
+          required: true
+        - label: I have searched the existing issues.
+          required: true
